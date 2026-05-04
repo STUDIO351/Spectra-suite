@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>SPECTRA v4.6 — SPECTRA SUITE</title>
@@ -462,9 +462,135 @@ select{background:var(--bg-raised);border:1px solid var(--border);color:var(--te
 ::-webkit-scrollbar{width:4px;}
 ::-webkit-scrollbar-track{background:var(--bg-deep);}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ══ FORCE MOBILE RENDERING ══════════════════
+   Prevents browser from choosing desktop layout.
+   Works on iOS Safari, Android Chrome, Samsung.
+═════════════════════════════════════════════ */
+html {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+}
+/* Nothing should ever be wider than the screen */
+* {
+  max-width: 100vw;
+}
+/* Except absolutely/fixed positioned elements */
+[style*="position:fixed"],
+[style*="position: fixed"],
+.drawer, .toast, .topbar {
+  max-width: 100vw !important;
+}
+
+
+/* ══ SUITE NAV BAR ═══════════════════════════
+   Persistent bar — return to suite + jump to tools
+═════════════════════════════════════════════ */
+.suite-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: rgba(7,5,8,0.97);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  z-index: 500;
+  gap: 4px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.suite-nav-home {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.5);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  white-space: nowrap;
+  transition: all 0.15s;
+  min-height: 28px;
+}
+.suite-nav-home:active { background: rgba(255,255,255,0.08); }
+.suite-nav-home span { font-size: 12px; }
+.suite-nav-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.suite-nav-tool {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid;
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s;
+}
+.suite-nav-tool:active { opacity: 0.7; }
+.suite-nav-tool.current {
+  opacity: 1;
+  font-weight: 700;
+}
+.suite-nav-tool.inactive {
+  opacity: 0.4;
+}
+.suite-nav-tool.c { color: #00e5ff; border-color: rgba(0,229,255,0.3); }
+.suite-nav-tool.g { color: #e8c84a; border-color: rgba(232,200,74,0.3); }
+.suite-nav-tool.v { color: #b060ff; border-color: rgba(176,96,255,0.3); }
+.suite-nav-tool.current.c { background: rgba(0,229,255,0.1); }
+.suite-nav-tool.current.g { background: rgba(232,200,74,0.1); }
+.suite-nav-tool.current.v { background: rgba(176,96,255,0.1); }
+
+/* Push topbar down for suite nav */
+.topbar {
+  top: 36px !important;
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+.quick-strip, #quickStrip {
+  margin-top: 92px !important;
+}
+body {
+  padding-top: 92px !important;
+}
+
 </style>
 </head>
 <body>
+
+<div class="suite-nav">
+  <a href="index.html" class="suite-nav-home"><span>⬡</span> SUITE</a>
+  <div class="suite-nav-tools">
+    <a href="SPECTRA_v4_6.html" class="suite-nav-tool c current">SPECTRA</a>
+    <a href="LENS_v4_6.html"    class="suite-nav-tool g inactive">LENS</a>
+    <a href="PRISM_v1_2.html"   class="suite-nav-tool v inactive">PRISM</a>
+  </div>
+</div>
+
 
 <!-- ══ TOP BAR ══ -->
 <header class="topbar">
@@ -2031,6 +2157,148 @@ window.addEventListener('resize',()=>{if(audioBuffer)drawWaveform();});
   const area=document.getElementById('workspaceArea');
   if(wrap&&area){wrap.style.height='50%';}
 })();
+
+// ══════════════════════════════════════════════
+// EVIDENCE PERSISTENCE & NAVIGATION GUARD
+// Prevents evidence loss on page reload,
+// desktop/mobile toggle, and orientation change
+// ══════════════════════════════════════════════
+
+// 1. BEFOREUNLOAD — warn if evidence is loaded
+window.addEventListener('beforeunload', function(e) {
+  const hasEvidence = (
+    (typeof audioBuffer !== 'undefined' && audioBuffer) ||
+    (typeof imageLoaded !== 'undefined' && imageLoaded) ||
+    (typeof videoLoaded !== 'undefined' && videoLoaded)
+  );
+  if (hasEvidence) {
+    e.preventDefault();
+    e.returnValue = 'Evidence is loaded. Leaving will clear your session.';
+    return e.returnValue;
+  }
+});
+
+// 2. VISIBILITY CHANGE — warn when tab becomes hidden
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) return;
+  // Tab came back into view — check evidence still in memory
+  const hasEvidence = (
+    (typeof audioBuffer !== 'undefined' && audioBuffer) ||
+    (typeof imageLoaded !== 'undefined' && imageLoaded) ||
+    (typeof videoLoaded !== 'undefined' && videoLoaded)
+  );
+  if (!hasEvidence) {
+    showEvidenceLostBanner();
+  }
+});
+
+// 3. ORIENTATION CHANGE — reflow layout, preserve evidence
+window.addEventListener('orientationchange', function() {
+  setTimeout(function() {
+    // Trigger reflow on workspace
+    const wa = document.getElementById('workspaceArea') || document.getElementById('workspace');
+    if (wa) { wa.style.display='none'; wa.offsetHeight; wa.style.display=''; }
+    // Re-render canvas if image tool
+    if (typeof renderCanvas === 'function') renderCanvas();
+    if (typeof drawWaveform === 'function') drawWaveform();
+  }, 300);
+});
+
+// 4. RESIZE OBSERVER — detect desktop/mobile toggle (big sudden resize)
+let lastWidth = window.innerWidth;
+let resizeTimeout;
+window.addEventListener('resize', function() {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(function() {
+    const newWidth = window.innerWidth;
+    const delta = Math.abs(newWidth - lastWidth);
+    if (delta > 200) {
+      // Large layout shift = likely desktop/mobile toggle
+      const hasEvidence = (
+        (typeof audioBuffer !== 'undefined' && audioBuffer) ||
+        (typeof imageLoaded !== 'undefined' && imageLoaded) ||
+        (typeof videoLoaded !== 'undefined' && videoLoaded)
+      );
+      if (hasEvidence) {
+        showModeToggleWarning();
+      }
+    }
+    lastWidth = newWidth;
+  }, 250);
+});
+
+// ── BANNER: evidence lost after mode switch ──
+function showEvidenceLostBanner() {
+  let banner = document.getElementById('evidenceLostBanner');
+  if (banner) return; // already showing
+  banner = document.createElement('div');
+  banner.id = 'evidenceLostBanner';
+  banner.style.cssText = [
+    'position:fixed','top:0','left:0','right:0','z-index:9999',
+    'background:#ff3d6b','color:#fff',
+    'font-family:Share Tech Mono,monospace','font-size:13px','letter-spacing:2px',
+    'padding:14px 16px','text-align:center',
+    'display:flex','align-items:center','justify-content:space-between','gap:12px'
+  ].join(';');
+  banner.innerHTML = [
+    '<span>⚠ EVIDENCE CLEARED — page was reloaded or mode was switched. Reload your file.</span>',
+    '<button onclick="dismissBanner()" ',
+    'style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.4);color:#fff;',
+    'font-family:Share Tech Mono,monospace;font-size:11px;letter-spacing:2px;',
+    'padding:8px 14px;border-radius:4px;cursor:pointer;white-space:nowrap;">RELOAD FILE</button>'
+  ].join('');
+  document.body.prepend(banner);
+}
+
+// ── WARNING: mode toggle detected while evidence loaded ──
+function showModeToggleWarning() {
+  let warn = document.getElementById('modeToggleWarn');
+  if (warn) { warn.remove(); }
+  warn = document.createElement('div');
+  warn.id = 'modeToggleWarn';
+  warn.style.cssText = [
+    'position:fixed','top:0','left:0','right:0','z-index:9999',
+    'background:#ffb700','color:#000',
+    'font-family:Share Tech Mono,monospace','font-size:12px','letter-spacing:2px',
+    'padding:14px 16px','text-align:center',
+    'display:flex','align-items:center','justify-content:space-between','gap:12px'
+  ].join(';');
+  warn.innerHTML = [
+    '<span>⚠ LAYOUT CHANGE DETECTED — if evidence cleared, tap RELOAD FILE</span>',
+    '<button onclick="dismissWarnReload()" ',
+    'style="background:rgba(0,0,0,0.2);border:1px solid rgba(0,0,0,0.3);color:#000;',
+    'font-family:Share Tech Mono,monospace;font-size:11px;letter-spacing:2px;',
+    'padding:8px 14px;border-radius:4px;cursor:pointer;white-space:nowrap;">RELOAD FILE</button>',
+    '<button onclick="dismissWarn()" ',
+    'style="background:transparent;border:none;color:#000;font-size:18px;cursor:pointer;padding:4px 8px;">✕</button>'
+  ].join('');
+  document.body.prepend(warn);
+  // Auto-dismiss after 8 seconds if evidence still intact
+  setTimeout(function() {
+    const w = document.getElementById('modeToggleWarn');
+    if (w) w.remove();
+  }, 8000);
+}
+
+
+// ── Quote-safe banner helpers ──
+function dismissBanner() {
+  var b = document.getElementById('evidenceLostBanner');
+  if (b) b.remove();
+  var fi = document.getElementById('fileInput');
+  if (fi) fi.click();
+}
+function dismissWarnReload() {
+  var w = document.getElementById('modeToggleWarn');
+  if (w) w.remove();
+  var fi = document.getElementById('fileInput');
+  if (fi) fi.click();
+}
+function dismissWarn() {
+  var w = document.getElementById('modeToggleWarn');
+  if (w) w.remove();
+}
+
 </script>
 </body>
 </html>

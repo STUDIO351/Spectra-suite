@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>PRISM v1.0 — SPECTRA SUITE</title>
@@ -640,9 +640,135 @@ input[type=range]::-webkit-slider-thumb {
   text-align: right;
 }
 
+
+/* ══ FORCE MOBILE RENDERING ══════════════════
+   Prevents browser from choosing desktop layout.
+   Works on iOS Safari, Android Chrome, Samsung.
+═════════════════════════════════════════════ */
+html {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+}
+/* Nothing should ever be wider than the screen */
+* {
+  max-width: 100vw;
+}
+/* Except absolutely/fixed positioned elements */
+[style*="position:fixed"],
+[style*="position: fixed"],
+.drawer, .toast, .topbar {
+  max-width: 100vw !important;
+}
+
+
+/* ══ SUITE NAV BAR ═══════════════════════════
+   Persistent bar — return to suite + jump to tools
+═════════════════════════════════════════════ */
+.suite-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: rgba(7,5,8,0.97);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  z-index: 500;
+  gap: 4px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.suite-nav-home {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.5);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  white-space: nowrap;
+  transition: all 0.15s;
+  min-height: 28px;
+}
+.suite-nav-home:active { background: rgba(255,255,255,0.08); }
+.suite-nav-home span { font-size: 12px; }
+.suite-nav-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.suite-nav-tool {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid;
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s;
+}
+.suite-nav-tool:active { opacity: 0.7; }
+.suite-nav-tool.current {
+  opacity: 1;
+  font-weight: 700;
+}
+.suite-nav-tool.inactive {
+  opacity: 0.4;
+}
+.suite-nav-tool.c { color: #00e5ff; border-color: rgba(0,229,255,0.3); }
+.suite-nav-tool.g { color: #e8c84a; border-color: rgba(232,200,74,0.3); }
+.suite-nav-tool.v { color: #b060ff; border-color: rgba(176,96,255,0.3); }
+.suite-nav-tool.current.c { background: rgba(0,229,255,0.1); }
+.suite-nav-tool.current.g { background: rgba(232,200,74,0.1); }
+.suite-nav-tool.current.v { background: rgba(176,96,255,0.1); }
+
+/* Push topbar down for suite nav */
+.topbar {
+  top: 36px !important;
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+.quick-strip, #quickStrip {
+  margin-top: 92px !important;
+}
+body {
+  padding-top: 92px !important;
+}
+
 </style>
 </head>
 <body>
+
+<div class="suite-nav">
+  <a href="index.html" class="suite-nav-home"><span>⬡</span> SUITE</a>
+  <div class="suite-nav-tools">
+    <a href="SPECTRA_v4_6.html" class="suite-nav-tool c inactive">SPECTRA</a>
+    <a href="LENS_v4_6.html"    class="suite-nav-tool g inactive">LENS</a>
+    <a href="PRISM_v1_2.html"   class="suite-nav-tool v current">PRISM</a>
+  </div>
+</div>
+
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
