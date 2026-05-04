@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>LENS v4.6 — SPECTRA SUITE</title>
+<!--
+  LENS v4.6 — v3 engine · v4 mobile shell · named for Claude Sonnet 4.6
+  ═══════════════════════════════════════════════
+  REMAPPED from v3 → v4:
+  - #dropZone           → #uploadOverlay  (tap-to-load, same file input)
+  - #workspace.visible  → #workspaceArea  (always shown after load)
+  - #viewerCanvas       → #viewerCanvas   (KEPT — engine writes to this)
+  - #offsetCanvas       → #offsetCanvas   (KEPT — overlaid on viewerCanvas)
+  - #zoomLens           → #zoomLens       (KEPT — repositioned inside workspaceArea)
+  - #zoomLensCanvas     → #zoomLensCanvas (KEPT)
+  - #splitDivider       → #splitDivider   (KEPT — draggable)
+  - #infoRow            → #infoRow        (hidden in workspace, data still written)
+  - #histCanvasInline   → #histCanvas     (renamed, same draw fn)
+  - #stackCount         → #stackCount     (in Layers tab half-open)
+  - #offsetControls     → always in Layers drawer (visibility via tab)
+  - #offsetToggleBtn    → offsetToggle div in Layers tab
+  - #zoomToggleBtn      → zoomChip in quick strip + zoomToggle in Analyze tab
+  - #livePreview        → liveToggle div in Analyze tab
+  - #exportBtn          → #exportBtn (in Export pane)
+  - statusPill          → #statusBadge
+  - .preset-card        → .preset-chip  (applyPreset wired to new chips)
+  - adjustStack()       → same, wired to +/- buttons in Layers tab
+  - nudgeOffset()       → same, wired to nudge pad in Layers drawer
+  - lockOffset()        → same, wired to Lock Layer button
+  - resetOffset()       → same
+  - runEnhancement()    → wired to Enhance button
+  - exportImage()       → wired to Save button
+  - undoEnhancement()   → wired to Undo
+  - resetToOriginal()   → wired to Reset
+  - loadNewImage()      → wired to Load New Image
+-->
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════
+   SHELL CSS — v4 layout
+══════════════════════════════════════ */
+:root {
+  --bg-deep:    #07080a;
+  --bg-dark:    #0d1014;
+  --bg-panel:   #111518;
+  --bg-surface: #181d22;
+  --bg-raised:  #1e252c;
+  --gold:       #c9a84c;
+  --gold-dim:   #8a6e2f;
+  --gold-glow:  rgba(201,168,76,0.18);
+  --teal:       #2dd4c8;
+  --teal-dim:   #1a8a84;
+  --teal-glow:  rgba(45,212,200,0.15);
+  --text:       #e8eaec;
+  --dim:        #8a9099;
+  --border:     rgba(255,255,255,0.06);
+  --border-gold:rgba(201,168,76,0.25);
+  --danger:     #e05252;
+  --accent:     #c9a84c;   /* alias for v3 engine refs */
+  --accent3:    #2dd4c8;
+  --topbar-h:   56px;
+  --strip-h:    46px;
+  --tabbar-h:   60px;
+  --drawer-half:  360px;
+  --drawer-full:  72vh;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+/* ══════════════════════════════════════
+   MOBILE OPTIMIZATIONS — v4.6 patch
+══════════════════════════════════════ */
+html, body {
+  overflow-x: hidden;
+}
+.flex {
+  display: flex;
+  flex-direction: column;
+}
+.card {
+  background: rgba(255,255,255,0.05);
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+button, .icon-btn, .tab-btn, .drawer-btn, .strip-btn, .save-btn {
+  min-height: 50px;
+}
+input[type=range] {
+  min-height: 44px;
+}
+
+body{
+  background:var(--bg-deep);
+  color:var(--text);
+  font-family:'Exo 2',sans-serif;
+  height:100dvh;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  user-select:none;
+}
+
+/* ── TOP BAR ── */
+.topbar{
+  height:var(--topbar-h);
+  background:var(--bg-dark);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;flex-shrink:0;position:relative;z-index:100;
+}
+.topbar-left,.topbar-right{display:flex;align-items:center;gap:8px;min-width:80px;}
+.topbar-right{justify-content:flex-end;}
+.topbar-center{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.app-title{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;letter-spacing:4px;color:var(--gold);text-transform:uppercase;line-height:1;}
+.suite-label{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;}
+.status-badge{
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;
+  padding:2px 7px;border-radius:3px;text-transform:uppercase;
+  background:rgba(45,212,200,0.1);color:var(--teal);border:1px solid var(--teal-dim);
+  transition:all 0.3s;white-space:nowrap;
+}
+.status-badge.processing{background:rgba(201,168,76,0.12);color:var(--gold);border-color:var(--gold-dim);animation:blink 0.8s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+.icon-btn{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);border:1px solid transparent;background:transparent;color:var(--dim);cursor:pointer;font-size:18px;transition:all 0.15s;}
+.icon-btn:active{transform:scale(0.92);background:var(--bg-raised);}
+.save-btn{height:34px;padding:0 14px;border-radius:var(--radius-sm);background:var(--gold);color:#000;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;border:none;cursor:pointer;transition:all 0.15s;}
+.save-btn:active{transform:scale(0.94);background:#b8932e;}
+
+/* ── WORKSPACE ── */
+.workspace-area{
+  flex:1;position:relative;overflow:hidden;background:#000;min-height:0;
+}
+/* scan lines */
+.workspace-area::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(to bottom,transparent,transparent 3px,rgba(0,0,0,0.05) 3px,rgba(0,0,0,0.05) 4px);pointer-events:none;z-index:2;}
+
+/* The v3 canvas fills the workspace */
+#viewerCanvas{display:block;width:100%;height:100%;object-fit:contain;position:absolute;top:0;left:0;}
+#offsetCanvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;display:none;}
+
+/* Zoom lens — v3 element, v4 styling */
+#zoomLens{
+  position:absolute;width:130px;height:130px;border-radius:50%;
+  border:2px solid var(--gold);box-shadow:0 0 0 1px rgba(0,0,0,0.8),0 0 20px rgba(201,168,76,0.3);
+  overflow:hidden;display:none;pointer-events:none;z-index:20;background:#000;
+}
+#zoomLensCanvas{width:100%;height:100%;display:block;}
+.zoom-crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:16px;height:16px;pointer-events:none;}
+.zoom-crosshair::before,.zoom-crosshair::after{content:'';position:absolute;background:rgba(201,168,76,0.7);}
+.zoom-crosshair::before{width:1px;height:100%;left:50%;}
+.zoom-crosshair::after{height:1px;width:100%;top:50%;}
+#zoomLevelLabel{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:1px;}
+
+/* Split divider — v3 element, v4 styling */
+.split-divider{position:absolute;top:0;bottom:0;width:3px;background:var(--gold);box-shadow:0 0 12px rgba(201,168,76,0.6);cursor:ew-resize;z-index:10;transform:translateX(-50%);}
+.split-handle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;background:var(--gold);border:2px solid #000;display:flex;align-items:center;justify-content:center;font-size:12px;color:#000;font-weight:800;}
+.split-label{position:absolute;bottom:8px;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;padding:3px 8px;border-radius:2px;pointer-events:none;z-index:5;}
+.split-label.orig{left:8px;background:rgba(0,0,0,0.6);color:var(--dim);}
+.split-label.enhanced{right:8px;background:rgba(201,168,76,0.15);color:var(--gold);}
+
+/* Upload overlay */
+.upload-overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;z-index:15;cursor:pointer;background:var(--bg-deep);
+}
+.upload-overlay.hidden{display:none;}
+.upload-icon{font-size:44px;opacity:0.3;}
+.upload-text{font-family:'Rajdhani',sans-serif;font-size:15px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;}
+.upload-sub{font-size:11px;color:var(--dim);opacity:0.5;}
+.upload-btn-label{display:inline-block;margin-top:6px;padding:12px 24px;background:var(--gold-glow);border:1px solid var(--border-gold);border-radius:var(--radius-sm);color:var(--gold);font-family:'Rajdhani',sans-serif;font-size:13px;letter-spacing:3px;cursor:pointer;}
+
+/* Corner brackets */
+.corner{position:absolute;width:18px;height:18px;z-index:5;pointer-events:none;opacity:0.35;}
+.corner-tl{top:8px;left:8px;border-top:1.5px solid var(--gold);border-left:1.5px solid var(--gold);}
+.corner-tr{top:8px;right:8px;border-top:1.5px solid var(--gold);border-right:1.5px solid var(--gold);}
+.corner-bl{bottom:8px;left:8px;border-bottom:1.5px solid var(--gold);border-left:1.5px solid var(--gold);}
+.corner-br{bottom:8px;right:8px;border-bottom:1.5px solid var(--gold);border-right:1.5px solid var(--gold);}
+
+/* Progress bar — rendered inside workspace */
+.progress-wrap{
+  display:none;position:absolute;bottom:0;left:0;right:0;z-index:25;
+  background:rgba(7,8,10,0.92);border-top:1px solid var(--border-gold);padding:10px 16px;
+}
+.progress-wrap.visible{display:block;}
+.progress-label{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--gold);letter-spacing:2px;margin-bottom:6px;}
+.progress-track{height:4px;background:var(--bg-raised);border-radius:2px;overflow:hidden;}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--gold),#e87a4a);border-radius:2px;transition:width 0.15s;}
+
+/* Hidden v3 infoRow (data still written, not displayed) */
+#infoRow{display:none;}
+
+/* ── QUICK STRIP ── */
+.quick-strip{
+  height:var(--strip-h);background:var(--bg-dark);border-top:1px solid var(--border);
+  display:flex;align-items:center;padding:0 10px;gap:6px;flex-shrink:0;
+  overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;
+}
+.quick-strip::-webkit-scrollbar{display:none;}
+.chip{
+  height:30px;padding:0 10px;border-radius:5px;border:1px solid var(--border);
+  background:var(--bg-surface);color:var(--dim);font-family:'Rajdhani',sans-serif;
+  font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
+  white-space:nowrap;cursor:pointer;display:flex;align-items:center;gap:5px;
+  flex-shrink:0;transition:all 0.15s;
+}
+.chip:active{transform:scale(0.94);}
+.chip.active{background:var(--gold-glow);border-color:var(--border-gold);color:var(--gold);}
+.chip.teal.active{background:var(--teal-glow);border-color:var(--teal-dim);color:var(--teal);}
+.strip-div{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* ── TAB BAR ── */
+.tabbar{height:var(--tabbar-h);background:var(--bg-dark);border-top:1px solid var(--border);display:flex;flex-shrink:0;position:relative;z-index:200;}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;position:relative;transition:all 0.2s;}
+.tab:active{background:rgba(255,255,255,0.03);}
+.tab-icon{font-size:17px;opacity:0.5;transition:all 0.2s;}
+.tab-label{font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);transition:all 0.2s;}
+.tab.active .tab-icon{opacity:1;}
+.tab.active .tab-label{color:var(--gold);}
+.tab-ind{position:absolute;bottom:0;left:20%;right:20%;height:2px;background:var(--gold);border-radius:2px 2px 0 0;opacity:0;transition:all 0.2s;box-shadow:0 0 6px var(--gold);}
+.tab.active .tab-ind{opacity:1;}
+
+/* ── DRAWER ── */
+.drawer-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0);z-index:149;pointer-events:none;transition:background 0.3s;}
+.drawer-backdrop.visible{pointer-events:auto;background:rgba(0,0,0,0.4);}
+.drawer{
+  position:fixed;bottom:var(--tabbar-h);left:0;right:0;
+  background:var(--bg-panel);border-top:1px solid var(--border-gold);
+  border-radius:var(--radius-lg) var(--radius-lg) 0 0;z-index:150;
+  transform:translateY(100%);transition:transform 0.32s cubic-bezier(0.4,0,0.2,1);
+  max-height:var(--drawer-full);display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 -8px 40px rgba(0,0,0,0.6);
+}
+.drawer.half{transform:translateY(calc(100% - var(--drawer-half)));}
+.drawer.full{transform:translateY(0);}
+
+.drawer-handle-bar{height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;position:relative;}
+.drawer-handle{width:40px;height:4px;border-radius:2px;background:rgba(255,255,255,0.15);}
+.drawer-tab-title{position:absolute;left:16px;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;color:var(--gold);text-transform:uppercase;}
+.drawer-expand-btn{position:absolute;right:12px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:16px;cursor:pointer;border-radius:50%;}
+.drawer-expand-btn:active{background:var(--bg-raised);}
+.drawer-content{overflow-y:auto;flex:1;padding:0 16px 20px;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+
+/* Drawer sections */
+.d-section{margin-bottom:14px;}
+.d-label{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2.5px;color:var(--dim);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.d-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Preset chips in drawer */
+.chip-row{display:flex;gap:8px;}
+.preset-chip{
+  flex:1;height:46px;border-radius:var(--radius-md);border:1px solid var(--border);
+  background:var(--bg-surface);color:var(--dim);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;cursor:pointer;transition:all 0.15s;
+  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;
+}
+.preset-chip:active{transform:scale(0.94);}
+.preset-chip.active{background:var(--gold-glow);border-color:var(--border-gold);color:var(--gold);}
+.preset-chip-icon{font-size:14px;opacity:0.7;}
+
+/* Toggle rows */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;min-height:46px;padding:0 2px;border-bottom:1px solid var(--border);}
+.toggle-row:last-child{border-bottom:none;}
+.toggle-lbl{font-family:'Exo 2',sans-serif;font-size:13px;color:var(--text);letter-spacing:0.5px;}
+.tgl{width:46px;height:26px;border-radius:13px;background:var(--bg-raised);border:1px solid var(--border);position:relative;cursor:pointer;transition:all 0.25s;flex-shrink:0;}
+.tgl.on{background:rgba(45,212,200,0.2);border-color:var(--teal-dim);}
+.tgl-knob{position:absolute;width:20px;height:20px;border-radius:50%;background:var(--dim);top:2px;left:2px;transition:all 0.25s cubic-bezier(0.4,0,0.2,1);}
+.tgl.on .tgl-knob{background:var(--teal);transform:translateX(20px);}
+
+/* Sliders */
+.sl-row{display:flex;align-items:center;gap:12px;min-height:52px;padding:0 2px;border-bottom:1px solid var(--border);}
+.sl-row:last-child{border-bottom:none;}
+.sl-name{font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;min-width:76px;}
+.sl-wrap{flex:1;padding:8px 0;}
+input[type=range]{width:100%;height:28px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer;margin:0;}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:var(--bg-raised);border:1px solid var(--border);}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--gold);border:2px solid rgba(0,0,0,0.3);margin-top:-12px;box-shadow:0 0 8px rgba(201,168,76,0.3);}
+input[type=range]:active::-webkit-slider-thumb{width:30px;height:30px;margin-top:-14px;box-shadow:0 0 16px rgba(201,168,76,0.6);}
+.sl-val{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--gold);min-width:36px;text-align:right;}
+
+/* Stack counter */
+.stack-row{display:flex;align-items:center;gap:10px;padding:8px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px;}
+.stack-mini-btn{width:40px;height:40px;border-radius:50%;border:1px solid var(--border);background:var(--bg-surface);color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0;}
+.stack-mini-btn:active{border-color:var(--gold);color:var(--gold);transform:scale(0.92);}
+.stack-num-wrap{flex:1;text-align:center;}
+.stack-num{font-family:'Share Tech Mono',monospace;font-size:26px;color:var(--gold);}
+.stack-sublbl{font-family:'Rajdhani',sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;}
+
+/* Select */
+.sel-row{display:flex;align-items:center;justify-content:space-between;min-height:46px;border-bottom:1px solid var(--border);gap:12px;}
+.sel-row:last-child{border-bottom:none;}
+select{background:var(--bg-raised);border:1px solid var(--border);color:var(--text);font-family:'Exo 2',sans-serif;font-size:12px;padding:8px 28px 8px 10px;border-radius:var(--radius-sm);flex:1;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5258'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+
+/* Nudge pad */
+.nudge-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;}
+.nudge-btn{height:52px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-surface);color:var(--dim);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.12s;}
+.nudge-btn:active{background:var(--bg-raised);border-color:var(--border-gold);color:var(--gold);transform:scale(0.92);}
+.nudge-btn.center{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;color:var(--teal);border-color:var(--teal-dim);background:var(--teal-glow);}
+.offset-info{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--teal);text-align:center;margin:4px 0 8px;letter-spacing:1px;}
+
+/* Histogram */
+.hist-wrap{height:52px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-surface);overflow:hidden;position:relative;margin-bottom:12px;}
+#histCanvas{width:100%;height:100%;display:block;}
+.hist-lbl{position:absolute;top:4px;left:8px;font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;}
+
+/* Info chips */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.info-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;}
+.info-card-lbl{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:4px;}
+.info-card-val{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;color:var(--text);}
+
+/* Buttons */
+.btn-primary{height:52px;border-radius:var(--radius-md);border:none;background:var(--gold);color:#000;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;}
+.btn-primary:active{transform:scale(0.97);background:#b8932e;}
+.btn-primary:disabled{opacity:0.35;cursor:not-allowed;}
+.btn-secondary{height:48px;border-radius:var(--radius-md);border:1px solid var(--border-gold);background:var(--gold-glow);color:var(--gold);font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;}
+.btn-secondary:active{transform:scale(0.97);}
+.btn-secondary:disabled{opacity:0.35;cursor:not-allowed;}
+.btn-ghost{height:46px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--dim);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;}
+.btn-ghost:active{background:var(--bg-raised);}
+.btn-danger{height:44px;border-radius:var(--radius-sm);border:1px solid rgba(224,82,82,0.3);background:rgba(224,82,82,0.08);color:var(--danger);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;}
+.btn-danger:active{background:rgba(224,82,82,0.15);}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.lock-btn{width:100%;padding:13px;border:1px solid #e87a4a;background:rgba(232,122,74,0.1);color:#e87a4a;font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:3px;cursor:pointer;border-radius:var(--radius-sm);transition:all 0.15s;margin-top:8px;}
+.lock-btn:active{background:rgba(232,122,74,0.2);}
+.lock-btn.locked{border-color:var(--teal);color:var(--teal);background:rgba(45,212,200,0.1);}
+
+/* Gap helpers */
+.gap8{height:8px;} .gap12{height:12px;}
+
+/* Pane visibility */
+.drawer-pane{display:none;}
+.drawer-pane.active{display:block;}
+/* full-only hidden unless drawer is full */
+.full-only{display:none;}
+
+/* ── PRE-LOAD: hide all chrome until image is loaded ── */
+.quick-strip.pre-load,
+.tabbar.pre-load,
+.drawer.pre-load {
+  display: none !important;
+}
+
+/* Save ready state — pulses gold to signal action available */
+.btn-secondary.ready{
+  border-color:var(--gold);
+  color:var(--gold);
+  background:rgba(201,168,76,0.18);
+  box-shadow:0 0 14px rgba(201,168,76,0.25);
+  animation:save-ready 2.4s ease-in-out infinite;
+}
+@keyframes save-ready{0%,100%{box-shadow:0 0 10px rgba(201,168,76,0.2)}50%{box-shadow:0 0 22px rgba(201,168,76,0.45)}}
+.btn-secondary.ready:active{animation:none;}
+
+/* Topbar save-btn ready state */
+.save-btn.ready{
+  box-shadow:0 0 14px rgba(201,168,76,0.5);
+  animation:save-ready 2.4s ease-in-out infinite;
+}
+
+/* Enhance button ready state — teal pulse to invite first tap */
+.btn-secondary.ready{
+  border-color:var(--gold);
+  color:var(--gold);
+  background:rgba(201,168,76,0.18);
+  box-shadow:0 0 14px rgba(201,168,76,0.25);
+  animation:save-ready 2.4s ease-in-out infinite;
+}
+.btn-secondary.ready:active{animation:none;}
+
+/* ══════════════════════════════════════
+   MOBILE RESPONSIVE — ≤768px
+══════════════════════════════════════ */
+@media (max-width: 768px) {
+  :root {
+    --topbar-h: 64px;
+    --strip-h: 56px;
+    --tabbar-h: 74px;
+    --drawer-half: 420px;
+    --drawer-full: 82vh;
+  }
+
+  .topbar { padding: 0 14px; }
+
+  .app-title { font-size: 22px; letter-spacing: 5px; }
+
+  .suite-label { font-size: 10px; letter-spacing: 2px; }
+
+  .status-badge { font-size: 10px; padding: 4px 8px; }
+
+  .save-btn { height: 40px; padding: 0 16px; font-size: 14px; }
+
+  .icon-btn { width: 44px; height: 44px; font-size: 20px; }
+
+  .quick-strip { height: 56px; padding: 0 12px; gap: 8px; }
+
+  .chip { height: 38px; padding: 0 14px; font-size: 12px; letter-spacing: 1px; border-radius: 8px; }
+
+  .tabbar { height: 74px; }
+
+  .tab-icon { font-size: 21px; }
+
+  .tab-label { font-size: 11px; letter-spacing: 1px; }
+
+  .drawer-handle-bar { height: 52px; }
+
+  .drawer-tab-title { font-size: 15px; letter-spacing: 2px; }
+
+  .drawer-content { padding: 0 18px 28px; }
+
+  .d-label { font-size: 11px; letter-spacing: 2px; margin-bottom: 12px; }
+
+  .preset-chip { height: 56px; font-size: 12px; }
+
+  .preset-chip-icon { font-size: 16px; }
+
+  .toggle-row { min-height: 56px; }
+
+  .toggle-lbl { font-size: 15px; }
+
+  .tgl { width: 52px; height: 30px; }
+
+  .tgl-knob { width: 24px; height: 24px; }
+
+  .tgl.on .tgl-knob { transform: translateX(20px); }
+
+  .sl-row { min-height: 62px; gap: 14px; }
+
+  .sl-name { min-width: 84px; font-size: 13px; }
+
+  .sl-val { font-size: 14px; min-width: 42px; }
+
+  input[type=range] { height: 34px; }
+
+  input[type=range]::-webkit-slider-thumb { width: 30px; height: 30px; margin-top: -14px; }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .btn-danger { min-height: 54px; font-size: 14px; letter-spacing: 2px; }
+
+  .stack-mini-btn { width: 46px; height: 46px; }
+
+  .stack-num { font-size: 30px; }
+
+  .nudge-btn { height: 58px; font-size: 20px; }
+
+  .offset-info { font-size: 11px; }
+
+  .upload-text { font-size: 18px; letter-spacing: 3px; }
+
+  .upload-sub { font-size: 12px; }
+
+  .upload-btn-label { padding: 14px 28px; font-size: 14px; }
+}
+
+/* Offset mode chip — more prominent than normal chips */
+.chip.offset-mode{
+  border-color:rgba(45,212,200,0.4);
+  color:var(--teal);
+  background:rgba(45,212,200,0.08);
+  font-weight:700;
+}
+.chip.offset-mode.active{
+  background:rgba(45,212,200,0.2);
+  border-color:var(--teal);
+  box-shadow:0 0 8px rgba(45,212,200,0.3);
+}
+
+/* Slider feedback — brief gold tint on track when moved */
+input[type=range]:active::-webkit-slider-runnable-track{
+  background:rgba(201,168,76,0.15);
+  border-color:var(--gold-dim);
+}
+</style>
+</head>
+<body>
+
+<!-- ══ TOP BAR ══ -->
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="icon-btn">☰</button>
+  </div>
+  <div class="topbar-center">
+    <div class="app-title">LENS</div>
+    <div class="suite-label">SPECTRA SUITE · v4.6</div>
+  </div>
+  <div class="topbar-right">
+    <span class="status-badge" id="statusBadge">READY</span>
+    <button class="save-btn" id="topSaveBtn" onclick="switchTab('export', document.querySelectorAll('.tab')[3])">SAVE</button>
+    <button class="icon-btn" onclick="loadNewImage()">⋮</button>
+  </div>
+</header>
+
+<!-- ══ WORKSPACE ══ -->
+<div class="workspace-area" id="viewerWrap">
+
+  <!-- v3 canvases — engine writes directly to these -->
+  <canvas id="viewerCanvas"></canvas>
+  <canvas id="offsetCanvas"></canvas>
+
+  <!-- v3 zoom lens -->
+  <div id="zoomLens">
+    <canvas id="zoomLensCanvas"></canvas>
+    <div class="zoom-crosshair"></div>
+    <div id="zoomLevelLabel">3×</div>
+  </div>
+
+  <!-- v3 split divider -->
+  <div class="split-divider" id="splitDivider" style="left:50%">
+    <div class="split-handle">⟺</div>
+  </div>
+  <div class="split-label orig">ORIGINAL</div>
+  <div class="split-label enhanced">ENHANCED</div>
+
+  <!-- Progress — shown during enhancement -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label" id="progressLabel">PROCESSING...</div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+
+  <!-- Corner brackets -->
+  <div class="corner corner-tl"></div>
+  <div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div>
+  <div class="corner corner-br"></div>
+
+  <!-- Upload overlay — replaces v3 dropZone -->
+  <div class="upload-overlay" id="uploadOverlay">
+    <div class="upload-icon">🔍</div>
+    <div class="upload-text">Load Evidence</div>
+    <div class="upload-sub">JPG · PNG · WEBP · BMP</div>
+    <label class="upload-btn-label" for="fileInput">⬡ SELECT FILE</label>
+    <input type="file" id="fileInput" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
+  </div>
+
+  <!-- v3 infoRow — hidden, data still written by engine -->
+  <div id="infoRow"></div>
+
+  <!-- newImgInput for v3 loadNewImage() -->
+  <input type="file" id="newImgInput" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
+</div>
+
+<!-- ══ QUICK STRIP ══ -->
+<div class="quick-strip pre-load" id="quickStrip">
+  <div class="chip" data-preset="glass" onclick="quickPreset('glass',this)">GLASS</div>
+  <div class="chip" data-preset="mirror" onclick="quickPreset('mirror',this)">MIRROR</div>
+  <div class="chip active" data-preset="screen" onclick="quickPreset('screen',this)">SCREEN</div>
+  <div class="chip" data-preset="wet" onclick="quickPreset('wet',this)">WET</div>
+  <div class="strip-div"></div>
+  <div class="chip teal active" id="splitChip" onclick="v4ToggleSplit()">SPLIT</div>
+  <div class="chip teal" id="liveChip" onclick="v4ToggleLive()">LIVE</div>
+  <div class="strip-div"></div>
+  <div class="chip" id="zoomChip" onclick="v4ToggleZoom()">🔍 ZOOM</div>
+  <div class="chip offset-mode" id="offsetChip" onclick="v4ToggleOffset()">⧉ OFFSET MODE</div>
+  <div class="strip-div"></div>
+  <div class="chip" onclick="undoEnhancement()">↩</div>
+</div>
+
+<!-- ══ TAB BAR ══ -->
+<nav class="tabbar pre-load" id="tabbar">
+  <div class="tab" onclick="switchTab('analyze',this)">
+    <span class="tab-icon">🔍</span>
+    <span class="tab-label">Analyze</span>
+    <div class="tab-ind"></div>
+  </div>
+  <div class="tab active" onclick="switchTab('enhance',this)">
+    <span class="tab-icon">🎚</span>
+    <span class="tab-label">Enhance</span>
+    <div class="tab-ind"></div>
+  </div>
+  <div class="tab" onclick="switchTab('layers',this)">
+    <span class="tab-icon">🧱</span>
+    <span class="tab-label">Layers</span>
+    <div class="tab-ind"></div>
+  </div>
+  <div class="tab" onclick="switchTab('export',this)">
+    <span class="tab-icon">📤</span>
+    <span class="tab-label">Export</span>
+    <div class="tab-ind"></div>
+  </div>
+</nav>
+
+<!-- ══ DRAWER BACKDROP ══ -->
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="setDrawer('half')"></div>
+
+<!-- ══ SLIDE-UP DRAWER ══ -->
+<div class="drawer half pre-load" id="drawer">
+  <div class="drawer-handle-bar" id="handleBar">
+    <div class="drawer-handle"></div>
+    <span class="drawer-tab-title" id="drawerTitle">ANALYZE</span>
+    <div class="drawer-expand-btn" id="expandBtn" onclick="toggleExpand()">⌃</div>
+  </div>
+
+  <div class="drawer-content">
+
+    <!-- ── ANALYZE PANE ── -->
+    <div class="drawer-pane active" id="pane-analyze">
+
+      <div class="d-section">
+        <div class="d-label">Surface Preset</div>
+        <div class="chip-row">
+          <div class="preset-chip"        data-preset="glass"   onclick="drawerPreset('glass',this)"><span class="preset-chip-icon">🪟</span>GLASS</div>
+          <div class="preset-chip"        data-preset="mirror"  onclick="drawerPreset('mirror',this)"><span class="preset-chip-icon">🪞</span>MIRROR</div>
+          <div class="preset-chip active" data-preset="screen"  onclick="drawerPreset('screen',this)"><span class="preset-chip-icon">📱</span>SCREEN</div>
+          <div class="preset-chip"        data-preset="wet"     onclick="drawerPreset('wet',this)"><span class="preset-chip-icon">💧</span>WET</div>
+        </div>
+      </div>
+
+      <div class="d-section">
+        <div class="d-label">View Controls</div>
+        <div class="toggle-row">
+          <div class="toggle-lbl">Split View</div>
+          <div class="tgl on" id="splitTgl" onclick="v4ToggleSplit()"><div class="tgl-knob"></div></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-lbl">Zoom Lens</div>
+          <div class="tgl" id="zoomTgl" onclick="v4ToggleZoom()"><div class="tgl-knob"></div></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-lbl">Offset Layer</div>
+          <div class="tgl" id="offsetTgl" onclick="v4ToggleOffset()"><div class="tgl-knob"></div></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-lbl">Live Preview</div>
+          <div class="tgl" id="liveTgl" onclick="v4ToggleLive()"><div class="tgl-knob"></div></div>
+        </div>
+      </div>
+
+      <!-- Zoom level — full-open only -->
+      <div class="full-only">
+        <div class="d-section">
+          <div class="d-label">Zoom Level</div>
+          <div class="sel-row">
+            <div class="toggle-lbl">Magnification</div>
+            <select id="zoomLevel" onchange="updateZoomLevel()">
+              <option value="2">2×</option>
+              <option value="3" selected>3×</option>
+              <option value="4">4×</option>
+              <option value="6">6×</option>
+              <option value="8">8×</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="d-section">
+          <div class="d-label">Image Info</div>
+          <div class="info-grid">
+            <div class="info-card"><div class="info-card-lbl">Original</div><div class="info-card-val" id="infoSize">—</div></div>
+            <div class="info-card"><div class="info-card-lbl">Display</div><div class="info-card-val" id="infoView">—</div></div>
+            <div class="info-card"><div class="info-card-lbl">Layers</div><div class="info-card-val" id="infoLayers">10</div></div>
+            <div class="info-card"><div class="info-card-lbl">State</div><div class="info-card-val" id="infoState">—</div></div>
+          </div>
+        </div>
+
+        <div class="d-section">
+          <div class="d-label">Histogram</div>
+          <div class="hist-wrap"><canvas id="histCanvas"></canvas><span class="hist-lbl">LUMINANCE</span></div>
+        </div>
+
+        <button class="btn-ghost" onclick="resetToOriginal()">↺ &nbsp;RESET VIEW</button>
+      </div>
+    </div>
+
+    <!-- ── ENHANCE PANE ── -->
+    <div class="drawer-pane" id="pane-enhance">
+
+      <div class="d-section">
+        <div class="d-label">Primary Enhancement</div>
+        <div class="sl-row">
+          <div class="sl-name">Sharpen</div>
+          <div class="sl-wrap"><input type="range" min="0" max="100" value="60" id="sharpen" oninput="syncSlider(this,'sharpenVal')"></div>
+          <div class="sl-val" id="sharpenVal">60</div>
+        </div>
+        <div class="sl-row">
+          <div class="sl-name">Deblur</div>
+          <div class="sl-wrap"><input type="range" min="0" max="100" value="40" id="deblur" oninput="syncSlider(this,'deblurVal')"></div>
+          <div class="sl-val" id="deblurVal">40</div>
+        </div>
+        <div class="sl-row">
+          <div class="sl-name">Contrast</div>
+          <div class="sl-wrap"><input type="range" min="0" max="100" value="50" id="contrast" oninput="syncSlider(this,'contrastVal')"></div>
+          <div class="sl-val" id="contrastVal">50</div>
+        </div>
+        <div class="sl-row">
+          <div class="sl-name">Clarity</div>
+          <div class="sl-wrap"><input type="range" min="0" max="100" value="50" id="clarity" oninput="syncSlider(this,'clarityVal')"></div>
+          <div class="sl-val" id="clarityVal">50</div>
+        </div>
+      </div>
+
+      <div class="full-only">
+        <div class="d-section">
+          <div class="d-label">Tone</div>
+          <div class="sl-row">
+            <div class="sl-name">Shadows</div>
+            <div class="sl-wrap"><input type="range" min="-100" max="100" value="20" id="shadows" oninput="syncSlider(this,'shadowsVal')"></div>
+            <div class="sl-val" id="shadowsVal">20</div>
+          </div>
+          <div class="sl-row">
+            <div class="sl-name">Hilights</div>
+            <div class="sl-wrap"><input type="range" min="-100" max="100" value="-20" id="highlights" oninput="syncSlider(this,'highlightsVal')"></div>
+            <div class="sl-val" id="highlightsVal">-20</div>
+          </div>
+        </div>
+
+        <div class="d-section">
+          <div class="d-label">Reflection Tools</div>
+          <div class="sl-row">
+            <div class="sl-name">Deglare</div>
+            <div class="sl-wrap"><input type="range" min="0" max="100" value="50" id="deglareStr" oninput="syncSlider(this,'deglareStrVal')"></div>
+            <div class="sl-val" id="deglareStrVal">50</div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-lbl">Deglare Active</div>
+            <!-- v3 uses real checkbox — hidden, synced via tgl click -->
+            <div class="tgl on" id="deglareTgl" onclick="syncCheck('deglare','deglareTgl')"><div class="tgl-knob"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-lbl">Surface Flatten</div>
+            <div class="tgl on" id="flattenTgl" onclick="syncCheck('flatten','flattenTgl')"><div class="tgl-knob"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-lbl">Edge Recover</div>
+            <div class="tgl on" id="edgeTgl" onclick="syncCheck('edgeRecover','edgeTgl')"><div class="tgl-knob"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-lbl">Noise Reduce</div>
+            <div class="tgl on" id="noiseTgl" onclick="syncCheck('noiseReduce','noiseTgl')"><div class="tgl-knob"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LAYERS PANE ── -->
+    <div class="drawer-pane" id="pane-layers">
+
+      <div class="d-section">
+        <div class="d-label">Stack Layers</div>
+        <div class="stack-row">
+          <button class="stack-mini-btn" onclick="adjustStack(-10)">−</button>
+          <div class="stack-num-wrap">
+            <div class="stack-num" id="stackCount">10</div>
+            <div class="stack-sublbl">Layers</div>
+          </div>
+          <button class="stack-mini-btn" onclick="adjustStack(10)">+</button>
+        </div>
+      </div>
+
+      <div class="d-section">
+        <div class="d-label">Offset Layer</div>
+        <div class="toggle-row">
+          <div class="toggle-lbl">Enable Offset</div>
+          <div class="tgl" id="offsetTgl2" onclick="v4ToggleOffset()"><div class="tgl-knob"></div></div>
+        </div>
+        <div class="sl-row">
+          <div class="sl-name">Opacity</div>
+          <div class="sl-wrap"><input type="range" min="0" max="100" value="50" id="offsetOpacity" oninput="updateOffsetOpacity(this.value)"></div>
+          <div class="sl-val" id="offsetOpacityVal">50%</div>
+        </div>
+      </div>
+
+      <div class="full-only">
+        <div class="d-section">
+          <div class="sl-row">
+            <div class="sl-name">Scale</div>
+            <div class="sl-wrap"><input type="range" min="80" max="120" value="100" id="offsetScale" oninput="updateOffsetScale(this.value)"></div>
+            <div class="sl-val" id="offsetScaleVal">100%</div>
+          </div>
+          <div class="sel-row">
+            <div class="toggle-lbl">Step Size</div>
+            <select id="nudgeStep">
+              <option value="1">1px — Fine</option>
+              <option value="3" selected>3px — Normal</option>
+              <option value="8">8px — Coarse</option>
+              <option value="16">16px — Large</option>
+            </select>
+          </div>
+          <div class="sel-row">
+            <div class="toggle-lbl">Blend Mode</div>
+            <select id="blendMode" onchange="renderOffsetLayer()">
+              <option value="normal">Normal</option>
+              <option value="difference" selected>Difference</option>
+              <option value="multiply">Multiply</option>
+              <option value="screen">Screen</option>
+              <option value="overlay">Overlay</option>
+              <option value="luminosity">Luminosity</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="d-section">
+          <div class="d-label">Nudge Position</div>
+          <div class="nudge-pad">
+            <button class="nudge-btn" onclick="nudgeOffset(-1,-1)">↖</button>
+            <button class="nudge-btn" onclick="nudgeOffset(0,-1)">↑</button>
+            <button class="nudge-btn" onclick="nudgeOffset(1,-1)">↗</button>
+            <button class="nudge-btn" onclick="nudgeOffset(-1,0)">←</button>
+            <button class="nudge-btn center" onclick="resetOffset()">RST</button>
+            <button class="nudge-btn" onclick="nudgeOffset(1,0)">→</button>
+            <button class="nudge-btn" onclick="nudgeOffset(-1,1)">↙</button>
+            <button class="nudge-btn" onclick="nudgeOffset(0,1)">↓</button>
+            <button class="nudge-btn" onclick="nudgeOffset(1,1)">↘</button>
+          </div>
+          <div class="offset-info" id="offsetInfo">X: 0px · Y: 0px · Scale: 100%</div>
+          <button class="lock-btn" id="lockOffsetBtn" onclick="lockOffset()">⬡ LOCK & FLATTEN LAYER</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── EXPORT PANE ── -->
+    <div class="drawer-pane" id="pane-export">
+      <div class="d-section">
+        <button class="btn-primary" id="exportBtn" onclick="exportImage()" disabled>↓ &nbsp;SAVE IMAGE</button>
+        <div class="gap8"></div>
+        <button class="btn-secondary" id="enhanceBtn" onclick="runEnhancement()">✦ &nbsp;ENHANCE</button>
+      </div>
+      <div class="full-only">
+        <div class="gap8"></div>
+        <div class="btn-row">
+          <button class="btn-ghost" onclick="undoEnhancement()">↩ UNDO</button>
+          <button class="btn-ghost" onclick="resetToOriginal()">↺ RESET</button>
+        </div>
+        <div class="gap8"></div>
+        <button class="btn-ghost" onclick="loadNewImage()">⬆ &nbsp;LOAD NEW IMAGE</button>
+        <div class="gap8"></div>
+        <button class="btn-danger" onclick="resetToOriginal()">⚠ &nbsp;DISCARD CHANGES</button>
+      </div>
+    </div>
+
+  </div><!-- /drawer-content -->
+</div><!-- /drawer -->
+
+<!-- hidden v3 checkboxes — engine reads these directly -->
+<div style="display:none">
+  <input type="checkbox" id="deglare" checked>
+  <input type="checkbox" id="flatten" checked>
+  <input type="checkbox" id="edgeRecover" checked>
+  <input type="checkbox" id="noiseReduce" checked>
+  <input type="checkbox" id="livePreview">
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  SHELL WIRING — v4 UI bridge
+//  (does not touch engine logic)
+// ════════════════════════════════════════════════════════
+
+// ── DRAWER ───────────────────────────────────────────────
+const drawer       = document.getElementById('drawer');
+const backdrop     = document.getElementById('drawerBackdrop');
+const expandBtn    = document.getElementById('expandBtn');
+let drawerState    = 'half';
+
+function setDrawer(s) {
+  drawerState = s;
+  drawer.className = 'drawer ' + s;
+  backdrop.className = 'drawer-backdrop' + (s === 'full' ? ' visible' : '');
+  expandBtn.textContent = s === 'full' ? '⌄' : '⌃';
+  document.querySelectorAll('.full-only').forEach(el => {
+    el.style.display = s === 'full' ? 'block' : 'none';
+  });
+}
+function toggleExpand() { setDrawer(drawerState === 'full' ? 'half' : 'full'); }
+
+// Drag handle
+let dhStartY = 0;
+document.getElementById('handleBar').addEventListener('touchstart', e => { dhStartY = e.touches[0].clientY; }, { passive: true });
+document.getElementById('handleBar').addEventListener('touchend', e => {
+  const dy = dhStartY - e.changedTouches[0].clientY;
+  if (Math.abs(dy) < 12) { toggleExpand(); return; }
+  if (dy > 40) setDrawer('full');
+  else if (dy < -40) setDrawer(drawerState === 'full' ? 'half' : 'collapsed');
+}, { passive: true });
+
+setDrawer('half');
+
+// ── TAB SWITCHING ────────────────────────────────────────
+const TAB_TITLES = { analyze:'ANALYZE', enhance:'ENHANCE', layers:'LAYERS', export:'EXPORT' };
+
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.drawer-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('pane-' + id).classList.add('active');
+  document.getElementById('drawerTitle').textContent = TAB_TITLES[id];
+  if (drawerState === 'collapsed') setDrawer('half');
+  else setDrawer(drawerState);
+}
+
+// ── SLIDER SYNC ──────────────────────────────────────────
+// syncSlider mirrors v3's updateVal() but uses new element IDs
+function syncSlider(input, valId) {
+  const el = document.getElementById(valId);
+  if (el) el.textContent = input.value;
+  // Unlock save buttons immediately on first adjustment
+  const saveBtn = document.getElementById('exportBtn');
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.classList.add('ready');
+  }
+  const topSave = document.getElementById('topSaveBtn');
+  if (topSave) topSave.classList.add('ready');
+  // trigger live if active
+  triggerLive();
+}
+
+// ── CHECKBOX SYNC ────────────────────────────────────────
+// v3 engine reads real <input type=checkbox> — tgl divs write to them
+function syncCheck(checkId, tglId) {
+  const cb = document.getElementById(checkId);
+  const tgl = document.getElementById(tglId);
+  if (!cb || !tgl) return;
+  cb.checked = !cb.checked;
+  tgl.classList.toggle('on', cb.checked);
+  triggerLive();
+}
+
+// ── SPLIT VIEW ───────────────────────────────────────────
+// Split is always on by default; we just hide the divider to "turn off"
+let splitVisible = true;
+function v4ToggleSplit() {
+  splitVisible = !splitVisible;
+  document.getElementById('splitDivider').style.display = splitVisible ? 'block' : 'none';
+  // Re-render: without split, show full enhanced (or original)
+  if (!splitVisible) {
+    if (enhancedImageData) {
+      const canvas = document.getElementById('viewerCanvas');
+      canvas.getContext('2d').putImageData(enhancedImageData, 0, 0);
+    }
+  } else {
+    renderSplit();
+  }
+  _syncTgl('splitTgl', splitVisible);
+  _syncChip('splitChip', splitVisible, true);
+}
+
+// ── ZOOM LENS ────────────────────────────────────────────
+// Delegates fully to v3 toggleZoomLens()
+function v4ToggleZoom() {
+  toggleZoomLens();
+  _syncTgl('zoomTgl', zoomActive);
+  _syncChip('zoomChip', zoomActive, false);
+}
+
+// ── OFFSET LAYER ─────────────────────────────────────────
+function v4ToggleOffset() {
+  toggleOffsetLayer();
+
+  switchTab('layers', document.querySelectorAll('.tab')[2]);
+  setDrawer('full');
+
+  _syncTgl('offsetTgl', offsetActive);
+  _syncTgl('offsetTgl2', offsetActive);
+  _syncChip('offsetChip', offsetActive, false);
+}
+
+// ── LIVE PREVIEW ─────────────────────────────────────────
+function v4ToggleLive() {
+  const cb = document.getElementById('livePreview');
+  cb.checked = !cb.checked;
+  onLivePreviewToggle();
+  _syncTgl('liveTgl', cb.checked);
+  _syncChip('liveChip', cb.checked, true);
+}
+
+// ── PRESET WIRING ────────────────────────────────────────
+// drawerPreset: called from drawer chips — finds matching element for v3 applyPreset
+function drawerPreset(name, el) {
+  // Mark all drawer chips
+  document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  // Mark quick strip chips
+  document.querySelectorAll('.quick-strip .chip[data-preset]').forEach(c => {
+    c.className = 'chip' + (c.dataset.preset === name ? ' active' : '');
+  });
+  // Call v3 engine directly — pass a fake el it can mark .active on (it won't find old .preset-card)
+  _applyPresetByName(name);
+}
+
+function quickPreset(name, el) {
+  document.querySelectorAll('.quick-strip .chip[data-preset]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.preset-chip').forEach(c => {
+    c.className = 'preset-chip' + (c.dataset.preset === name ? ' active' : '');
+  });
+  _applyPresetByName(name);
+}
+
+// Apply preset values directly (bypasses old DOM element lookup in applyPreset)
+function _applyPresetByName(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  ['sharpen','deblur','contrast','clarity','shadows','highlights','deglareStr'].forEach(k => {
+    const sl = document.getElementById(k);
+    if (sl) { sl.value = p[k]; syncSlider(sl, k + 'Val'); }
+  });
+  const checkMap = { deglare:'deglareTgl', flatten:'flattenTgl', edgeRecover:'edgeTgl', noiseReduce:'noiseTgl' };
+  Object.keys(checkMap).forEach(k => {
+    const cb = document.getElementById(k);
+    const tgl = document.getElementById(checkMap[k]);
+    if (cb && tgl) { cb.checked = p[k]; tgl.classList.toggle('on', p[k]); }
+  });
+}
+
+// ── UPLOAD OVERLAY ───────────────────────────────────────
+// Override v3 initWorkspace to also hide our overlay
+const _v3initWorkspace = window.initWorkspace; // will be defined below in engine
+// We patch after engine loads (see bottom of script)
+
+// ── SAVE BUTTON STATE ────────────────────────────────────
+// v3 disables #exportBtn — we replicate that behaviour
+// exportBtn is already wired in the pane HTML
+
+// ── STATUS ───────────────────────────────────────────────
+// v3 calls setStatus(msg, state) — we re-map to statusBadge
+// (v3 setStatus is redefined below)
+
+// ── HISTOGRAM ────────────────────────────────────────────
+// v3 drawHistogramInline() targets #histCanvasInline
+// We redirect it to #histCanvas (see redefinition at bottom)
+
+// ── INFO CARDS ───────────────────────────────────────────
+// v3 writes to #infoRow innerHTML — we also update our cards
+function updateInfoCards(origW, origH, viewW, viewH) {
+  const s = document.getElementById('infoSize');
+  const v = document.getElementById('infoView');
+  if (s) s.textContent = origW + '×' + origH;
+  if (v) v.textContent = viewW + '×' + viewH;
+}
+
+// ── HELPERS ──────────────────────────────────────────────
+function _syncTgl(id, on) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('on', on);
+}
+function _syncChip(id, on, isTeal) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'chip' + (isTeal ? ' teal' : '') + (on ? ' active' : '');
+}
+
+
+// ════════════════════════════════════════════════════════
+//  v3 ENGINE — PRESERVED INTACT
+//  Only changes:
+//  1. initWorkspace: hides #uploadOverlay instead of #dropZone
+//  2. setStatus: writes to #statusBadge instead of #statusPill
+//  3. drawHistogramInline: writes to #histCanvas instead of #histCanvasInline
+//  4. wireInputs: removed dropZone drag logic (not needed in v4)
+// ════════════════════════════════════════════════════════
+
+let originalImage    = null;
+let originalImageData = null;
+let enhancedImageData = null;
+let stackLayers = 10;
+let splitX = 0.5;
+let undoStack = [];
+
+// Zoom lens
+let zoomActive = false;
+let zoomLevel  = 3;
+let zoomPos    = { x: 0, y: 0 };
+
+// Offset layer
+let offsetActive = false;
+let offsetX = 0, offsetY = 0;
+let offsetScale   = 1.0;
+let offsetOpacity = 0.5;
+let offsetLocked  = false;
+
+// ── FILE LOADING ─────────────────────────────────────────
+function wireInputs() {
+  const fi = document.getElementById('fileInput');
+  if (fi) fi.onchange = e => { if (e.target.files[0]) loadImageFile(e.target.files[0]); e.target.value = ''; };
+  const ni = document.getElementById('newImgInput');
+  if (ni) ni.onchange = e => { if (e.target.files[0]) loadImageFile(e.target.files[0]); e.target.value = ''; };
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireInputs);
+else wireInputs();
+
+function loadNewImage() { document.getElementById('newImgInput').click(); }
+
+function loadImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) { setStatus('NOT AN IMAGE', false); return; }
+  setStatus('LOADING...', 'processing');
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => { originalImage = img; initWorkspace(img); };
+    img.onerror = () => setStatus('LOAD ERROR', false);
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── INIT WORKSPACE ───────────────────────────────────────
+// CHANGED from v3: hides #uploadOverlay instead of #dropZone
+function initWorkspace(img) {
+  document.getElementById('uploadOverlay').classList.add('hidden');
+
+  const canvas = document.getElementById('viewerCanvas');
+  const wrap   = document.getElementById('viewerWrap');
+  const maxW   = wrap.offsetWidth;
+  const maxH   = wrap.offsetHeight || Math.min(window.innerHeight * 0.55, 480);
+  const scale  = Math.min(maxW / img.width, maxH / img.height, 1);
+  canvas.width  = Math.round(img.width  * scale);
+  canvas.height = Math.round(img.height * scale);
+
+  // Match offset canvas
+  const oc = document.getElementById('offsetCanvas');
+  oc.width  = canvas.width;
+  oc.height = canvas.height;
+
+  // Center canvas in workspace
+  canvas.style.position = 'absolute';
+  canvas.style.top  = Math.max(0, (wrap.offsetHeight - canvas.height) / 2) + 'px';
+  canvas.style.left = Math.max(0, (wrap.offsetWidth  - canvas.width)  / 2) + 'px';
+  canvas.style.width  = canvas.width  + 'px';
+  canvas.style.height = canvas.height + 'px';
+  oc.style.top  = canvas.style.top;
+  oc.style.left = canvas.style.left;
+  oc.style.width  = canvas.style.width;
+  oc.style.height = canvas.style.height;
+
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  // Update info cards
+  updateInfoCards(img.width, img.height, canvas.width, canvas.height);
+  document.getElementById('infoLayers').textContent = stackLayers;
+  document.getElementById('infoState').textContent = 'LOADED';
+
+  drawHistogramInline(originalImageData);
+  setStatus('LOADED', true);
+  splitX = 0.5;
+  updateSplitDivider();
+  initSplitDrag();
+  initZoomLens();
+  initOffsetDrag();
+  offsetX = 0; offsetY = 0; offsetScale = 1.0;
+  undoStack = [];
+  enhancedImageData = null;
+  document.getElementById('exportBtn').disabled = true;
+  offsetActive = false;
+  document.getElementById('offsetCanvas').style.display = 'none';
+  _syncTgl('offsetTgl', false);
+  _syncTgl('offsetTgl2', false);
+
+  // ── AUTO-FLOW ON LOAD ──
+  // Reveal chrome, apply screen preset, land on Enhance tab, drawer half-open
+  // Gives user immediate path: load → adjust → save
+  setTimeout(() => {
+    // Unhide all chrome now that we have an image
+    document.getElementById('quickStrip').classList.remove('pre-load');
+    document.getElementById('tabbar').classList.remove('pre-load');
+    document.getElementById('drawer').classList.remove('pre-load');
+    _applyPresetByName('screen');
+    document.querySelectorAll('.chip[data-preset]').forEach(c => {
+      c.classList.toggle('active', c.dataset.preset === 'screen');
+    });
+    document.querySelectorAll('.preset-chip').forEach(c => {
+      c.classList.toggle('active', c.dataset.preset === 'screen');
+    });
+    switchTab('enhance', document.querySelectorAll('.tab')[1]);
+    setDrawer('half');
+    document.getElementById('enhanceBtn').classList.add('ready');
+  }, 50);
+}
+
+// ── SPLIT DIVIDER ────────────────────────────────────────
+function updateSplitDivider() {
+  const canvas  = document.getElementById('viewerCanvas');
+  const wrap    = document.getElementById('viewerWrap');
+  const divider = document.getElementById('splitDivider');
+  // Position relative to canvas inside wrap
+  const canvasLeft = canvas.offsetLeft;
+  const pct = (canvasLeft + splitX * canvas.offsetWidth) / wrap.offsetWidth * 100;
+  divider.style.left = pct + '%';
+  renderSplit();
+}
+
+function renderSplit() {
+  if (!originalImageData) return;
+  const canvas = document.getElementById('viewerCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const splitPx = Math.round(splitX * W);
+  ctx.putImageData(originalImageData, 0, 0);
+  if (enhancedImageData) {
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    tmp.getContext('2d').putImageData(enhancedImageData, 0, 0);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(splitPx, 0, W - splitPx, H); ctx.clip();
+    ctx.drawImage(tmp, 0, 0);
+    ctx.restore();
+  }
+  if (splitVisible) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(201,168,76,0.9)';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(201,168,76,0.5)'; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.moveTo(splitPx, 0); ctx.lineTo(splitPx, H); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function initSplitDrag() {
+  const divider = document.getElementById('splitDivider');
+  const wrap    = document.getElementById('viewerWrap');
+  const canvas  = document.getElementById('viewerCanvas');
+  function getX(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    return (clientX - rect.left) / canvas.offsetWidth;
+  }
+  function onMove(e) { e.preventDefault(); splitX = Math.max(0.05, Math.min(0.95, getX(e))); updateSplitDivider(); }
+  function onEnd() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+  }
+  divider.addEventListener('mousedown', e => { e.preventDefault(); document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onEnd); });
+  divider.addEventListener('touchstart', e => { e.preventDefault(); document.addEventListener('touchmove', onMove, { passive: false }); document.addEventListener('touchend', onEnd); }, { passive: false });
+}
+
+// ── ZOOM LENS ────────────────────────────────────────────
+function toggleZoomLens() {
+  zoomActive = !zoomActive;
+  const lens = document.getElementById('zoomLens');
+  if (zoomActive) {
+    lens.style.display = 'block';
+    setStatus('ZOOM LENS ON', true);
+  } else {
+    lens.style.display = 'none';
+    setStatus('ZOOM LENS OFF', false);
+  }
+}
+
+function updateZoomLevel() {
+  zoomLevel = parseInt(document.getElementById('zoomLevel').value);
+  document.getElementById('zoomLevelLabel').textContent = zoomLevel + '×';
+  if (zoomActive) drawZoomLens();
+}
+
+function initZoomLens() {
+  const wrap   = document.getElementById('viewerWrap');
+  const canvas = document.getElementById('viewerCanvas');
+  function onMove(e) {
+    if (!zoomActive || !originalImageData) return;
+    e.preventDefault();
+    const rect    = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const scaleX  = canvas.width  / canvas.offsetWidth;
+    const scaleY  = canvas.height / canvas.offsetHeight;
+    zoomPos.x = Math.round((clientX - rect.left)  * scaleX);
+    zoomPos.y = Math.round((clientY - rect.top)   * scaleY);
+    const lens  = document.getElementById('zoomLens');
+    const lensW = 130, lensH = 130;
+    let lx = clientX - rect.left - lensW / 2;
+    let ly = clientY - rect.top  - lensH - 20;
+    if (ly < 4) ly = clientY - rect.top + 20;
+    lx = Math.max(4, Math.min(canvas.offsetWidth  - lensW - 4, lx));
+    lens.style.left = lx + 'px'; lens.style.top = ly + 'px';
+    drawZoomLens();
+  }
+  wrap.addEventListener('mousemove', onMove);
+  wrap.addEventListener('touchmove', onMove, { passive: false });
+}
+
+function drawZoomLens() {
+  const srcCanvas  = document.getElementById('viewerCanvas');
+  const lensCanvas = document.getElementById('zoomLensCanvas');
+  const lW = 130, lH = 130;
+  lensCanvas.width = lW; lensCanvas.height = lH;
+  const ctx = lensCanvas.getContext('2d');
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, lW, lH);
+  const srcW = Math.round(lW / zoomLevel);
+  const srcH = Math.round(lH / zoomLevel);
+  const sx = Math.max(0, Math.min(srcCanvas.width  - srcW, zoomPos.x - srcW / 2));
+  const sy = Math.max(0, Math.min(srcCanvas.height - srcH, zoomPos.y - srcH / 2));
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(srcCanvas, sx, sy, srcW, srcH, 0, 0, lW, lH);
+}
+
+// ── OFFSET LAYER ─────────────────────────────────────────
+function toggleOffsetLayer() {
+  offsetActive = !offsetActive;
+  const oc = document.getElementById('offsetCanvas');
+  if (offsetActive) {
+    oc.style.display = 'block';
+    offsetLocked = false;
+    document.getElementById('lockOffsetBtn').classList.remove('locked');
+    document.getElementById('lockOffsetBtn').textContent = '⬡ LOCK & FLATTEN LAYER';
+    renderOffsetLayer();
+    setStatus('OFFSET LAYER ON', true);
+  } else {
+    oc.style.display = 'none';
+    setStatus('OFFSET LAYER OFF', false);
+  }
+}
+
+function renderOffsetLayer() {
+  if (!offsetActive || !originalImageData) return;
+  const oc = document.getElementById('offsetCanvas');
+  const W = oc.width, H = oc.height;
+  const ctx = oc.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = W; srcCanvas.height = H;
+  srcCanvas.getContext('2d').putImageData(originalImageData, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = offsetOpacity;
+  ctx.globalCompositeOperation = document.getElementById('blendMode').value;
+  const cx = W / 2, cy = H / 2;
+  ctx.translate(cx + offsetX, cy + offsetY);
+  ctx.scale(offsetScale, offsetScale);
+  ctx.drawImage(srcCanvas, -cx, -cy);
+  ctx.restore();
+}
+
+function nudgeOffset(dx, dy) {
+  if (offsetLocked) return;
+  const step = parseInt(document.getElementById('nudgeStep').value);
+  offsetX += dx * step;
+  offsetY += dy * step;
+  updateOffsetInfo();
+  renderOffsetLayer();
+}
+
+function resetOffset() {
+  offsetX = 0; offsetY = 0; offsetScale = 1.0;
+  document.getElementById('offsetScale').value = 100;
+  document.getElementById('offsetScaleVal').textContent = '100%';
+  updateOffsetInfo();
+  renderOffsetLayer();
+}
+
+function updateOffsetOpacity(val) {
+  offsetOpacity = val / 100;
+  document.getElementById('offsetOpacityVal').textContent = val + '%';
+  renderOffsetLayer();
+}
+
+function updateOffsetScale(val) {
+  offsetScale = val / 100;
+  document.getElementById('offsetScaleVal').textContent = val + '%';
+  updateOffsetInfo();
+  renderOffsetLayer();
+}
+
+function updateOffsetInfo() {
+  document.getElementById('offsetInfo').textContent =
+    'X: ' + offsetX + 'px · Y: ' + offsetY + 'px · Scale: ' + Math.round(offsetScale * 100) + '%';
+}
+
+function lockOffset() {
+  if (!offsetActive || !originalImageData) return;
+  pushUndo();
+  const canvas = document.getElementById('viewerCanvas');
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  if (enhancedImageData) ctx.putImageData(enhancedImageData, 0, 0);
+  else ctx.putImageData(originalImageData, 0, 0);
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = W; srcCanvas.height = H;
+  srcCanvas.getContext('2d').putImageData(originalImageData, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = offsetOpacity;
+  ctx.globalCompositeOperation = document.getElementById('blendMode').value;
+  const cx = W / 2, cy = H / 2;
+  ctx.translate(cx + offsetX, cy + offsetY);
+  ctx.scale(offsetScale, offsetScale);
+  ctx.drawImage(srcCanvas, -cx, -cy);
+  ctx.restore();
+  enhancedImageData = ctx.getImageData(0, 0, W, H);
+  renderSplit();
+  drawHistogramInline(enhancedImageData);
+  document.getElementById('exportBtn').disabled = false;
+  resetOffset();
+  offsetLocked = true;
+  document.getElementById('lockOffsetBtn').classList.add('locked');
+  document.getElementById('lockOffsetBtn').textContent = '✓ LAYER FLATTENED';
+  document.getElementById('offsetCanvas').style.display = 'none';
+  _syncTgl('offsetTgl', false);
+  _syncTgl('offsetTgl2', false);
+  setStatus('LAYER FLATTENED', true);
+}
+
+function initOffsetDrag() {
+  const wrap = document.getElementById('viewerWrap');
+  let dragging = false, startX = 0, startY = 0, startOX = 0, startOY = 0;
+  function onStart(e) {
+    if (!offsetActive || offsetLocked) return;
+    dragging = true;
+    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    startY = e.touches ? e.touches[0].clientY : e.clientY;
+    startOX = offsetX; startOY = offsetY;
+  }
+  function onMove(e) {
+    if (!dragging) return;
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const canvas = document.getElementById('viewerCanvas');
+    const scaleX = canvas.width / canvas.offsetWidth;
+    const scaleY = canvas.height / canvas.offsetHeight;
+    offsetX = startOX + Math.round((cx - startX) * scaleX);
+    offsetY = startOY + Math.round((cy - startY) * scaleY);
+    updateOffsetInfo();
+    renderOffsetLayer();
+  }
+  function onEnd() { dragging = false; }
+  const oc = document.getElementById('offsetCanvas');
+  oc.style.pointerEvents = 'auto';
+  oc.addEventListener('mousedown', onStart);
+  oc.addEventListener('touchstart', onStart, { passive: true });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', e => { if (dragging) { e.preventDefault(); onMove(e); } }, { passive: false });
+  document.addEventListener('mouseup', onEnd);
+  document.addEventListener('touchend', onEnd);
+}
+
+// ── STACK ────────────────────────────────────────────────
+function adjustStack(delta) {
+  stackLayers = Math.max(10, Math.min(100, stackLayers + delta));
+  document.getElementById('stackCount').textContent = stackLayers;
+  document.getElementById('infoLayers').textContent = stackLayers;
+}
+
+// ── PRESETS ──────────────────────────────────────────────
+const PRESETS = {
+  glass:  { sharpen:65, deblur:45, contrast:55, clarity:60, shadows:25, highlights:-30, deglareStr:60, deglare:true,  flatten:true,  edgeRecover:true,  noiseReduce:true  },
+  mirror: { sharpen:70, deblur:50, contrast:60, clarity:55, shadows:15, highlights:-40, deglareStr:75, deglare:true,  flatten:false, edgeRecover:true,  noiseReduce:false },
+  screen: { sharpen:80, deblur:60, contrast:70, clarity:70, shadows:30, highlights:-20, deglareStr:40, deglare:true,  flatten:true,  edgeRecover:true,  noiseReduce:true  },
+  wet:    { sharpen:55, deblur:35, contrast:65, clarity:50, shadows:40, highlights:-15, deglareStr:50, deglare:true,  flatten:true,  edgeRecover:false, noiseReduce:true  },
+};
+
+// ── LIVE PREVIEW ─────────────────────────────────────────
+let liveTimer = null;
+function onLivePreviewToggle() {
+  const on = document.getElementById('livePreview').checked;
+  const inputs = document.querySelectorAll('#pane-enhance input[type=range], #pane-enhance input[type=checkbox]');
+  if (on) {
+    inputs.forEach(el => { el.addEventListener('input', triggerLive); el.addEventListener('change', triggerLive); });
+    // also watch hidden checkboxes
+    ['deglare','flatten','edgeRecover','noiseReduce'].forEach(id => {
+      const cb = document.getElementById(id);
+      if (cb) { cb.addEventListener('change', triggerLive); }
+    });
+  } else {
+    inputs.forEach(el => { el.removeEventListener('input', triggerLive); el.removeEventListener('change', triggerLive); });
+  }
+}
+function triggerLive() {
+  if (!document.getElementById('livePreview').checked) return;
+  clearTimeout(liveTimer);
+  // Visual feedback: brief status hint
+  setStatus('ADJUSTING...', 'processing');
+  liveTimer = setTimeout(() => { if (originalImageData) { pushUndo(); runEnhancement(); } }, 700);
+}
+
+// ── UNDO / RESET ─────────────────────────────────────────
+function pushUndo() {
+  if (enhancedImageData) {
+    undoStack.push(new ImageData(new Uint8ClampedArray(enhancedImageData.data), enhancedImageData.width, enhancedImageData.height));
+    if (undoStack.length > 10) undoStack.shift();
+  }
+}
+function undoEnhancement() {
+  if (undoStack.length === 0) { resetToOriginal(); return; }
+  enhancedImageData = undoStack.pop();
+  renderSplit();
+  drawHistogramInline(enhancedImageData);
+  setStatus('UNDONE', true);
+}
+function resetToOriginal() {
+  enhancedImageData = null; undoStack = [];
+  renderSplit();
+  if (originalImageData) drawHistogramInline(originalImageData);
+  const expBtn = document.getElementById('exportBtn');
+  expBtn.disabled = true;
+  expBtn.classList.remove('ready');
+  const topSave = document.getElementById('topSaveBtn');
+  if (topSave) topSave.classList.remove('ready');
+  document.getElementById('infoState').textContent = 'ORIGINAL';
+  setStatus('RESET', false);
+}
+
+// ── ENHANCEMENT ENGINE ───────────────────────────────────
+async function runEnhancement() {
+  if (!originalImageData) return;
+  // Prevent spam taps during processing
+  document.getElementById('enhanceBtn').disabled = true;
+  showProgress('INITIALIZING...', 0);
+  setStatus('PROCESSING', 'processing');
+  await sleep(30);
+
+  const src         = originalImageData;
+  const W = src.width, H = src.height;
+  const sharpen      = parseInt(document.getElementById('sharpen').value)    / 100;
+  const deblurAmt    = parseInt(document.getElementById('deblur').value)     / 100;
+  const contrastAmt  = parseInt(document.getElementById('contrast').value)   / 100;
+  const clarityAmt   = parseInt(document.getElementById('clarity').value)    / 100;
+  const shadowsAmt   = parseInt(document.getElementById('shadows').value)    / 100;
+  const highlightsAmt= parseInt(document.getElementById('highlights').value) / 100;
+  const deglareAmt   = parseInt(document.getElementById('deglareStr').value) / 100;
+  const doDeglare    = document.getElementById('deglare').checked;
+  const doFlatten    = document.getElementById('flatten').checked;
+  const doEdge       = document.getElementById('edgeRecover').checked;
+  const doNoise      = document.getElementById('noiseReduce').checked;
+
+  showProgress('STACKING ' + stackLayers + ' LAYERS...', 10); await sleep(20);
+  let stacked = stackImage(src.data, W, H, stackLayers);
+
+  if (doNoise)       { showProgress('REDUCING NOISE...', 25);   await sleep(20); stacked = gaussianBlur(stacked, W, H, 0.6); }
+  if (deblurAmt > 0) { showProgress('DEBLURRING...', 40);       await sleep(20); stacked = unsharpMask(stacked, W, H, deblurAmt * 2.5, deblurAmt * 0.8); }
+  if (sharpen > 0)   { showProgress('SHARPENING...', 55);       await sleep(20); stacked = sharpenPass(stacked, W, H, sharpen); }
+  if (doDeglare && deglareAmt > 0) { showProgress('REMOVING GLARE...', 65); await sleep(20); stacked = deglarePass(stacked, W, H, deglareAmt); }
+  if (doFlatten)     { showProgress('FLATTENING SURFACE...', 72); await sleep(20); stacked = flattenSurface(stacked, W, H); }
+  if (doEdge)        { showProgress('RECOVERING EDGES...', 80); await sleep(20); stacked = edgeRecover(stacked, W, H, clarityAmt); }
+  showProgress('TONE MAPPING...', 88); await sleep(20);
+  stacked = toneMap(stacked, W, H, contrastAmt, shadowsAmt, highlightsAmt);
+  showProgress('FINALIZING...', 95); await sleep(20);
+
+  const canvas = document.getElementById('viewerCanvas');
+  const ctx    = canvas.getContext('2d');
+  enhancedImageData = ctx.createImageData(W, H);
+  enhancedImageData.data.set(stacked);
+
+  hideProgress();
+  renderSplit();
+  drawHistogramInline(enhancedImageData);
+  // Enable and visually emphasise both save buttons
+  const expBtn = document.getElementById('exportBtn');
+  expBtn.disabled = false;
+  expBtn.classList.add('ready');
+  const topSave = document.getElementById('topSaveBtn');
+  if (topSave) topSave.classList.add('ready');
+  document.getElementById('enhanceBtn').disabled = false;
+  document.getElementById('infoState').textContent = 'ENHANCED';
+  setStatus('ENHANCED', true);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── PROCESSING FUNCTIONS (v3, untouched) ─────────────────
+function stackImage(data, W, H, layers) {
+  const result = new Float32Array(W * H * 4);
+  for (let i = 0; i < layers; i++) {
+    const angle = (i / layers) * Math.PI * 2;
+    const radius = (i / layers) * 1.5;
+    const dx = Math.cos(angle) * radius, dy = Math.sin(angle) * radius;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const sx = Math.max(0, Math.min(W-1, Math.round(x + dx)));
+        const sy = Math.max(0, Math.min(H-1, Math.round(y + dy)));
+        const si = (sy * W + sx) * 4, di = (y * W + x) * 4;
+        result[di] += data[si]; result[di+1] += data[si+1]; result[di+2] += data[si+2]; result[di+3] += data[si+3];
+      }
+    }
+  }
+  const out = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < out.length; i++) out[i] = result[i] / layers;
+  return out;
+}
+function gaussianBlur(data, W, H, radius) {
+  const k = makeGaussKernel(radius), ks = k.length, half = Math.floor(ks / 2);
+  const tmp = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let r=0,g=0,b=0,a=0,wt=0;
+    for (let i = 0; i < ks; i++) { const sx=Math.max(0,Math.min(W-1,x+i-half)),idx=(y*W+sx)*4; r+=data[idx]*k[i]; g+=data[idx+1]*k[i]; b+=data[idx+2]*k[i]; a+=data[idx+3]*k[i]; wt+=k[i]; }
+    const oi=(y*W+x)*4; tmp[oi]=r/wt; tmp[oi+1]=g/wt; tmp[oi+2]=b/wt; tmp[oi+3]=a/wt;
+  }
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let r=0,g=0,b=0,a=0,wt=0;
+    for (let i = 0; i < ks; i++) { const sy=Math.max(0,Math.min(H-1,y+i-half)),idx=(sy*W+x)*4; r+=tmp[idx]*k[i]; g+=tmp[idx+1]*k[i]; b+=tmp[idx+2]*k[i]; a+=tmp[idx+3]*k[i]; wt+=k[i]; }
+    const oi=(y*W+x)*4; out[oi]=r/wt; out[oi+1]=g/wt; out[oi+2]=b/wt; out[oi+3]=a/wt;
+  }
+  return out;
+}
+function makeGaussKernel(r) { const s=Math.max(3,Math.round(r*3)*2+1),k=[]; for(let i=0;i<s;i++){const x=i-Math.floor(s/2);k.push(Math.exp(-(x*x)/(2*r*r)));} return k; }
+function unsharpMask(data,W,H,amount,radius) { const b=gaussianBlur(data,W,H,Math.max(0.5,radius*3)),out=new Uint8ClampedArray(data.length); for(let i=0;i<data.length;i+=4){for(let c=0;c<3;c++)out[i+c]=Math.max(0,Math.min(255,data[i+c]+(data[i+c]-b[i+c])*amount));out[i+3]=data[i+3];} return out; }
+function sharpenPass(data,W,H,amount) { const kn=[0,-1,0,-1,5,-1,0,-1,0],out=new Uint8ClampedArray(data.length),bl=amount*0.7; for(let y=0;y<H;y++)for(let x=0;x<W;x++){const oi=(y*W+x)*4;let r=0,g=0,b=0;for(let ky=-1;ky<=1;ky++)for(let kx=-1;kx<=1;kx++){const si=(Math.max(0,Math.min(H-1,y+ky))*W+Math.max(0,Math.min(W-1,x+kx)))*4,kv=kn[(ky+1)*3+(kx+1)];r+=data[si]*kv;g+=data[si+1]*kv;b+=data[si+2]*kv;}out[oi]=Math.max(0,Math.min(255,data[oi]*(1-bl)+r*bl));out[oi+1]=Math.max(0,Math.min(255,data[oi+1]*(1-bl)+g*bl));out[oi+2]=Math.max(0,Math.min(255,data[oi+2]*(1-bl)+b*bl));out[oi+3]=data[oi+3];} return out; }
+function deglarePass(data,W,H,amount) { const out=new Uint8ClampedArray(data),t=255-(amount*120); for(let i=0;i<data.length;i+=4){const l=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];if(l>t){const f=1-((l-t)/(255-t))*amount*0.7;out[i]=Math.round(data[i]*f);out[i+1]=Math.round(data[i+1]*f);out[i+2]=Math.round(data[i+2]*f);}} return out; }
+function flattenSurface(data,W,H) { const b=gaussianBlur(data,W,H,Math.min(W,H)*0.08),out=new Uint8ClampedArray(data.length); for(let i=0;i<data.length;i+=4){for(let c=0;c<3;c++)out[i+c]=Math.max(0,Math.min(255,(data[i+c]/(b[i+c]+1))*128));out[i+3]=data[i+3];} return out; }
+function edgeRecover(data,W,H,amount) { const e=new Uint8ClampedArray(data.length),sX=[-1,0,1,-2,0,2,-1,0,1],sY=[-1,-2,-1,0,0,0,1,2,1]; for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const idx=(y*W+x)*4;let gx=0,gy=0;for(let ky=-1;ky<=1;ky++)for(let kx=-1;kx<=1;kx++){const si=((y+ky)*W+(x+kx))*4,l=0.299*data[si]+0.587*data[si+1]+0.114*data[si+2],ki=(ky+1)*3+(kx+1);gx+=l*sX[ki];gy+=l*sY[ki];}const m=Math.min(255,Math.sqrt(gx*gx+gy*gy));e[idx]=e[idx+1]=e[idx+2]=m;e[idx+3]=255;} const out=new Uint8ClampedArray(data.length),bl=amount*0.5; for(let i=0;i<data.length;i+=4){for(let c=0;c<3;c++)out[i+c]=Math.max(0,Math.min(255,data[i+c]+e[i+c]*bl));out[i+3]=data[i+3];} return out; }
+function toneMap(data,W,H,contrast,shadows,highlights) { const out=new Uint8ClampedArray(data.length),cf=(259*(contrast*128+255))/(255*(259-contrast*128)); for(let i=0;i<data.length;i+=4){for(let c=0;c<3;c++){let v=data[i+c];v=Math.max(0,Math.min(255,cf*(v-128)+128));if(v<128&&shadows!==0)v=Math.max(0,Math.min(255,v+shadows*60*(1-v/128)));if(v>128&&highlights!==0)v=Math.max(0,Math.min(255,v+highlights*60*((v-128)/128)));out[i+c]=v;}out[i+3]=data[i+3];} return out; }
+
+// ── HISTOGRAM ────────────────────────────────────────────
+// CHANGED from v3: targets #histCanvas instead of #histCanvasInline
+function drawHistogramInline(imgData) {
+  const canvas = document.getElementById('histCanvas');
+  if (!canvas) return;
+  canvas.width  = canvas.offsetWidth  || 280;
+  canvas.height = canvas.offsetHeight || 52;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#181d22'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const bins = new Array(256).fill(0);
+  for (let i = 0; i < imgData.data.length; i += 4)
+    bins[Math.round(0.299*imgData.data[i]+0.587*imgData.data[i+1]+0.114*imgData.data[i+2])]++;
+  const max = Math.max(...bins), W = canvas.width, H = canvas.height;
+  const grad = ctx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,'rgba(201,168,76,0.4)');
+  grad.addColorStop(0.5,'rgba(201,168,76,0.85)');
+  grad.addColorStop(1,'rgba(232,120,74,0.6)');
+  ctx.fillStyle = grad;
+  for (let i = 0; i < 256; i++) {
+    const x = Math.floor(i/256*W), h = Math.round((bins[i]/max)*(H-4));
+    ctx.fillRect(x, H-h, Math.max(1, W/256), h);
+  }
+}
+
+// ── PROGRESS ─────────────────────────────────────────────
+function showProgress(label, pct) {
+  document.getElementById('progressWrap').classList.add('visible');
+  document.getElementById('progressLabel').textContent = label;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+function hideProgress() { document.getElementById('progressWrap').classList.remove('visible'); }
+
+// ── EXPORT ───────────────────────────────────────────────
+function exportImage() {
+  if (!enhancedImageData) return;
+  const canvas = document.createElement('canvas');
+  canvas.width  = enhancedImageData.width;
+  canvas.height = enhancedImageData.height;
+  canvas.getContext('2d').putImageData(enhancedImageData, 0, 0);
+  const a = document.createElement('a');
+  a.href     = canvas.toDataURL('image/png');
+  a.download = 'LENS_v4_enhanced.png';
+  a.click();
+}
+
+// ── STATUS ───────────────────────────────────────────────
+// CHANGED from v3: targets #statusBadge instead of #statusPill
+function setStatus(msg, state) {
+  const el = document.getElementById('statusBadge');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status-badge';
+  if (state === true)           el.classList.add('active');    // teal ready
+  if (state === 'processing')   el.classList.add('processing'); // gold blink
+  // also update infoState if possible
+  const is = document.getElementById('infoState');
+  if (is) is.textContent = msg;
+}
+
+// ── HELPERS ──────────────────────────────────────────────
+// updateVal kept for any stray calls
+function updateVal(el, valId) { const v = document.getElementById(valId); if(v) v.textContent = el.value; }
+</script>
+</body>
+</html>
