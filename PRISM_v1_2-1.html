@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>PRISM v1.0 — SPECTRA SUITE</title>
+<!--
+  PRISM v1.0 — Forensic Video Analysis
+  ════════════════════════════════════
+  Same shell architecture as LENS v4.6 / SPECTRA v4.6:
+  - Top bar, Quick Strip, Tab Bar, Slide-up Drawer
+  - 4 tabs: Analyze · Enhance · Clips · Export
+  - Drawer: collapsed / half / full (3 states)
+  - Pre-load: strip/tabbar/drawer hidden until file loads
+  Features:
+  - Frame scrubbing + zoom loupe
+  - Real-time speed control (0.25x – 2x)
+  - Frame-by-frame stepping
+  - Split before/after view
+  - Brightness/contrast/sharpness/denoise filters
+  - Frame extraction & export
+  - Audio track extraction
+  - Timestamp overlay
+  - Loop region playback
+  - AI frame description
+-->
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════
+   SUITE SHELL — shared with LENS/SPECTRA
+══════════════════════════════════════ */
+:root {
+  --bg-deep:    #070508;
+  --bg-dark:    #100d14;
+  --bg-panel:   #151020;
+  --bg-surface: #1a1428;
+  --bg-raised:  #211a32;
+  --violet:     #b060ff;
+  --violet-dim: #6030a0;
+  --violet-glow:rgba(176,96,255,0.15);
+  --pink:       #ff3d9a;
+  --pink-dim:   #801040;
+  --cyan:       #00e5ff;
+  --green:      #39ff14;
+  --warn:       #ffb700;
+  --danger:     #ff3d6b;
+  --text:       #f0e8ff;
+  --dim:        #9a8ab8;
+  --border:     rgba(255,255,255,0.07);
+  --border-v:   rgba(176,96,255,0.25);
+  --topbar-h:   56px;
+  --strip-h:    46px;
+  --tabbar-h:   60px;
+  --drawer-half:380px;
+  --drawer-full:80vh;
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+/* ══ MOBILE OPTIMIZATIONS ══ */
+html,body{overflow-x:hidden;}
+.flex{display:flex;flex-direction:column;}
+.card{background:rgba(255,255,255,0.05);padding:12px;border-radius:12px;margin-bottom:10px;}
+button,.icon-btn,.tab-btn,.drawer-btn,.strip-btn{min-height:50px;}
+input[type=range]{min-height:44px;}
+
+body{
+  background:var(--bg-deep);color:var(--text);
+  font-family:'Exo 2',sans-serif;
+  height:100dvh;overflow:hidden;
+  display:flex;flex-direction:column;user-select:none;
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(176,96,255,0.012) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(176,96,255,0.012) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;z-index:0;
+}
+
+/* ── TOP BAR ── */
+.topbar{
+  height:var(--topbar-h);background:var(--bg-dark);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;flex-shrink:0;position:relative;z-index:100;
+}
+.topbar-left,.topbar-right{display:flex;align-items:center;gap:8px;min-width:80px;}
+.topbar-right{justify-content:flex-end;}
+.topbar-center{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.app-title{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;letter-spacing:4px;color:var(--violet);text-transform:uppercase;line-height:1;text-shadow:0 0 16px rgba(176,96,255,0.4);}
+.suite-label{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;}
+.status-badge{
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;
+  padding:2px 7px;border-radius:3px;text-transform:uppercase;
+  background:rgba(176,96,255,0.08);color:var(--violet);border:1px solid var(--violet-dim);
+  transition:all 0.3s;white-space:nowrap;
+}
+.status-badge.active{background:rgba(57,255,20,0.1);color:var(--green);border-color:#1a7a09;}
+.status-badge.playing{background:rgba(176,96,255,0.12);color:var(--violet);border-color:var(--violet);animation:blink 1.2s infinite;}
+.status-badge.processing{background:rgba(255,183,0,0.1);color:var(--warn);border-color:var(--warn);animation:blink 0.8s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+.icon-btn{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);border:1px solid transparent;background:transparent;color:var(--dim);cursor:pointer;font-size:18px;transition:all 0.15s;}
+.icon-btn:active{transform:scale(0.92);background:var(--bg-raised);}
+.export-btn-top{height:34px;padding:0 14px;border-radius:var(--radius-sm);background:var(--violet);color:#fff;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;border:none;cursor:pointer;transition:all 0.15s;}
+.export-btn-top:active{transform:scale(0.94);}
+.export-btn-top:disabled{opacity:0.3;cursor:not-allowed;}
+
+/* ── WORKSPACE ── */
+.workspace-area{
+  flex:1;position:relative;overflow:hidden;background:#000;min-height:0;z-index:1;
+}
+.workspace-area::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(to bottom,transparent,transparent 3px,rgba(0,0,0,0.05) 3px,rgba(0,0,0,0.05) 4px);pointer-events:none;z-index:2;}
+
+#videoEl{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:contain;background:#000;display:none;
+}
+#frameCanvas{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:contain;display:none;z-index:3;pointer-events:none;
+}
+#splitCanvas{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  display:none;z-index:4;pointer-events:none;
+}
+.split-divider{
+  position:absolute;top:0;bottom:0;width:3px;
+  background:var(--violet);box-shadow:0 0 12px rgba(176,96,255,0.6);
+  cursor:ew-resize;z-index:10;transform:translateX(-50%);display:none;
+}
+.split-handle{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:32px;height:32px;border-radius:50%;
+  background:var(--violet);border:2px solid #000;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:#fff;font-weight:800;
+}
+
+/* Zoom loupe */
+#zoomLoupe{
+  position:absolute;width:130px;height:130px;border-radius:50%;
+  border:2px solid var(--violet);box-shadow:0 0 0 1px rgba(0,0,0,0.8),0 0 20px rgba(176,96,255,0.3);
+  overflow:hidden;display:none;pointer-events:none;z-index:20;background:#000;
+}
+#zoomLoupeCanvas{width:100%;height:100%;display:block;}
+
+/* Time overlay */
+.time-overlay{
+  position:absolute;bottom:8px;left:8px;z-index:8;
+  font-family:'Share Tech Mono',monospace;font-size:11px;
+  color:var(--violet);text-shadow:0 0 8px rgba(176,96,255,0.8);
+  background:rgba(7,5,8,0.7);padding:3px 8px;border-radius:4px;
+  pointer-events:none;
+}
+.frame-counter{
+  position:absolute;bottom:8px;right:8px;z-index:8;
+  font-family:'Share Tech Mono',monospace;font-size:11px;
+  color:var(--dim);background:rgba(7,5,8,0.7);
+  padding:3px 8px;border-radius:4px;pointer-events:none;
+}
+
+/* Upload overlay */
+#uploadOverlay{
+  position:absolute;inset:0;z-index:50;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  background:var(--bg-deep);
+}
+.upload-icon{font-size:52px;opacity:0.4;animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:0.4}50%{transform:scale(1.06);opacity:0.6}}
+.upload-title{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;letter-spacing:4px;color:var(--violet);text-transform:uppercase;}
+.upload-sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:2px;text-align:center;line-height:1.8;}
+.upload-btn{
+  margin-top:8px;padding:14px 32px;border-radius:var(--radius-md);
+  background:var(--violet);color:#fff;
+  font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:3px;
+  border:none;cursor:pointer;
+}
+#uploadStatus{display:none;width:80%;max-width:300px;}
+.upload-progress-bar{height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-top:8px;}
+.upload-progress-fill{height:100%;background:var(--violet);border-radius:2px;transition:width 0.3s;}
+#uploadStatusText{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:2px;text-align:center;margin-top:6px;}
+
+/* Progress bar */
+.progress-wrap{display:none;position:absolute;bottom:0;left:0;right:0;z-index:25;background:rgba(7,5,8,0.92);border-top:1px solid var(--border-v);padding:10px 16px;}
+.progress-wrap.visible{display:block;}
+.progress-label{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--violet);letter-spacing:2px;margin-bottom:6px;}
+.progress-bar{height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--violet),var(--pink));border-radius:2px;transition:width 0.3s;}
+
+/* ── QUICK STRIP ── */
+.quick-strip{
+  height:var(--strip-h);background:var(--bg-dark);
+  border-bottom:1px solid var(--border);
+  display:none;align-items:center;
+  padding:0 10px;gap:6px;flex-shrink:0;overflow-x:auto;
+  scrollbar-width:none;position:relative;z-index:99;
+}
+.quick-strip::-webkit-scrollbar{display:none;}
+.strip-chip{
+  height:30px;padding:0 12px;border-radius:20px;
+  background:var(--bg-surface);border:1px solid var(--border);
+  font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;
+  color:var(--dim);cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px;
+  transition:all 0.15s;flex-shrink:0;
+}
+.strip-chip.active{background:rgba(176,96,255,0.15);border-color:var(--violet);color:var(--violet);}
+.strip-chip:active{transform:scale(0.94);}
+.strip-divider{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* Playback scrubber */
+.scrub-wrap{
+  display:none;flex-shrink:0;position:relative;z-index:98;
+  background:var(--bg-dark);border-bottom:1px solid var(--border);
+  padding:6px 12px 8px;
+}
+.scrub-bar-track{
+  width:100%;height:6px;background:var(--bg-surface);border-radius:3px;
+  position:relative;cursor:pointer;
+}
+.scrub-bar-fill{
+  height:100%;background:linear-gradient(90deg,var(--violet),var(--pink));
+  border-radius:3px;width:0%;transition:width 0.1s;pointer-events:none;
+}
+.scrub-thumb{
+  position:absolute;top:50%;transform:translate(-50%,-50%);
+  width:16px;height:16px;border-radius:50%;
+  background:var(--violet);border:2px solid #fff;
+  box-shadow:0 0 8px rgba(176,96,255,0.5);
+  cursor:grab;left:0%;transition:left 0.1s;
+}
+.loop-region{
+  position:absolute;top:0;height:100%;
+  background:rgba(176,96,255,0.2);
+  border-left:2px solid var(--violet);border-right:2px solid var(--pink);
+  pointer-events:none;display:none;
+}
+
+/* ── TAB BAR ── */
+.tabbar{
+  height:var(--tabbar-h);background:var(--bg-dark);
+  border-top:1px solid var(--border);
+  display:none;align-items:stretch;
+  flex-shrink:0;position:relative;z-index:99;
+}
+.tab-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;cursor:pointer;
+  background:transparent;border:none;color:var(--dim);
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;
+  transition:all 0.15s;border-top:2px solid transparent;
+}
+.tab-btn.active{color:var(--violet);border-top-color:var(--violet);background:rgba(176,96,255,0.05);}
+.tab-btn:active{transform:scale(0.95);}
+.tab-icon{font-size:18px;line-height:1;}
+
+/* ── DRAWER ── */
+.drawer{
+  position:fixed;left:0;right:0;bottom:0;z-index:200;
+  background:var(--bg-panel);border-top:1px solid var(--border-v);
+  border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  display:none;flex-direction:column;
+  transition:transform 0.32s cubic-bezier(0.32,0.72,0,1);
+  will-change:transform;max-height:var(--drawer-full);
+}
+.drawer.half{transform:translateY(0);height:var(--drawer-half);}
+.drawer.full{transform:translateY(0);height:var(--drawer-full);}
+.drawer.collapsed{transform:translateY(100%);}
+.drawer-handle-bar{
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  padding:10px 0 4px;cursor:pointer;
+}
+.drawer-handle{width:40px;height:4px;border-radius:2px;background:rgba(255,255,255,0.15);}
+.drawer-tabs{
+  display:flex;border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.drawer-tab{
+  flex:1;padding:10px 0;text-align:center;
+  font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1.5px;
+  color:var(--dim);cursor:pointer;border:none;background:transparent;
+  border-bottom:2px solid transparent;transition:all 0.15s;
+}
+.drawer-tab.active{color:var(--violet);border-bottom-color:var(--violet);}
+.drawer-content{flex:1;overflow-y:auto;padding:12px;scrollbar-width:thin;scrollbar-color:rgba(176,96,255,0.3) transparent;}
+
+/* Drawer panes */
+.drawer-pane{display:none;}
+.drawer-pane.active{display:block;}
+
+/* Controls */
+.ctrl-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.ctrl-label{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;color:var(--dim);min-width:72px;}
+.ctrl-val{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--violet);min-width:36px;text-align:right;}
+input[type=range]{
+  flex:1;-webkit-appearance:none;height:4px;
+  background:var(--bg-surface);border-radius:2px;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--violet);border:2px solid var(--bg-panel);cursor:pointer;
+  box-shadow:0 0 6px rgba(176,96,255,0.4);
+}
+.section-label{
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;
+  color:var(--violet);text-transform:uppercase;margin:14px 0 8px;
+  padding-bottom:4px;border-bottom:1px solid var(--border-v);
+}
+.action-btn{
+  width:100%;padding:12px;border-radius:var(--radius-md);
+  border:1px solid var(--border-v);background:rgba(176,96,255,0.08);
+  color:var(--violet);font-family:'Rajdhani',sans-serif;font-weight:600;
+  font-size:14px;letter-spacing:2px;cursor:pointer;
+  margin-bottom:8px;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.action-btn:active{transform:scale(0.97);background:rgba(176,96,255,0.15);}
+.action-btn.primary{background:var(--violet);color:#fff;border-color:var(--violet);}
+.action-btn.danger{background:rgba(255,61,107,0.1);color:var(--danger);border-color:rgba(255,61,107,0.3);}
+.action-btn:disabled{opacity:0.3;cursor:not-allowed;}
+
+/* Playback controls row */
+.playback-controls{
+  display:flex;align-items:center;justify-content:center;
+  gap:8px;padding:8px 0 12px;
+}
+.play-btn{
+  width:54px;height:54px;border-radius:50%;
+  background:var(--violet);border:none;
+  font-size:20px;color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 16px rgba(176,96,255,0.4);transition:all 0.15s;
+}
+.play-btn:active{transform:scale(0.93);}
+.frame-btn{
+  width:42px;height:42px;border-radius:50%;
+  background:var(--bg-surface);border:1px solid var(--border-v);
+  font-size:16px;color:var(--violet);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all 0.15s;
+}
+.frame-btn:active{transform:scale(0.92);}
+.speed-pill{
+  padding:6px 12px;border-radius:20px;
+  background:var(--bg-surface);border:1px solid var(--border-v);
+  font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--violet);
+  cursor:pointer;transition:all 0.15s;
+}
+.speed-pill.active{background:rgba(176,96,255,0.15);}
+
+/* Clip grid */
+.clip-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.clip-card{
+  background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:8px;cursor:pointer;transition:all 0.2s;aspect-ratio:16/10;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);
+  text-align:center;gap:4px;position:relative;overflow:hidden;
+}
+.clip-card.selected{border-color:var(--violet);background:rgba(176,96,255,0.1);}
+.clip-thumb{width:100%;height:60px;object-fit:cover;border-radius:4px;display:block;}
+.clip-name{font-size:8px;color:var(--dim);word-break:break-all;line-height:1.2;}
+.clip-time{font-size:8px;color:var(--violet);}
+.clip-del{
+  position:absolute;top:2px;right:2px;width:18px;height:18px;
+  background:rgba(255,61,107,0.8);border:none;border-radius:50%;
+  color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+.empty-state{
+  text-align:center;padding:32px 16px;
+  font-family:'Share Tech Mono',monospace;font-size:10px;
+  color:var(--dim);letter-spacing:1px;line-height:2;
+}
+
+/* AI describe box */
+.ai-result{
+  background:var(--bg-surface);border:1px solid var(--border-v);border-radius:var(--radius-md);
+  padding:12px;margin-top:8px;
+  font-family:'Exo 2',sans-serif;font-size:13px;color:var(--text);line-height:1.6;
+  min-height:60px;display:none;
+}
+.ai-result.visible{display:block;}
+
+/* Metadata row */
+.meta-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:6px 0;border-bottom:1px solid var(--border);
+}
+.meta-key{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:1px;}
+.meta-val{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text);}
+
+/* Export formats */
+.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.export-opt{
+  padding:12px 8px;border-radius:var(--radius-md);
+  border:1px solid var(--border);background:var(--bg-surface);
+  text-align:center;cursor:pointer;transition:all 0.15s;
+}
+.export-opt.active{border-color:var(--violet);background:rgba(176,96,255,0.1);}
+.export-opt-icon{font-size:22px;display:block;margin-bottom:4px;}
+.export-opt-label{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:1px;}
+.export-opt.active .export-opt-label{color:var(--violet);}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--bg-raised);border:1px solid var(--border-v);border-radius:var(--radius-md);
+  padding:10px 20px;font-family:'Share Tech Mono',monospace;font-size:11px;
+  color:var(--violet);letter-spacing:1px;z-index:999;opacity:0;transition:all 0.25s;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ══════════════════════════════════════
+   PRISM v1.1 — MOBILE PATCH
+   Same rules as SPECTRA v4.6 / LENS v4.6
+══════════════════════════════════════ */
+
+/* Base font size */
+body { font-size: 16px; }
+
+/* Drawer controls */
+.ctrl-label { font-size: 13px !important; min-width: 80px !important; }
+.ctrl-val   { font-size: 13px !important; }
+.section-label { font-size: 11px !important; }
+
+/* Action buttons — full width, big tap area */
+.action-btn {
+  font-size: 15px !important;
+  padding: 14px 12px !important;
+  min-height: 50px !important;
+  margin-bottom: 10px !important;
+  border-radius: 12px !important;
+}
+.action-btn.primary { min-height: 54px !important; }
+
+/* Play / frame step buttons */
+.play-btn  { width: 60px !important; height: 60px !important; font-size: 22px !important; }
+.frame-btn { width: 48px !important; height: 48px !important; font-size: 18px !important; }
+
+/* Speed pills */
+.speed-pill { font-size: 13px !important; padding: 8px 14px !important; min-height: 36px !important; }
+
+/* Range sliders — bigger touch target */
+input[type=range] {
+  height: 6px !important;
+  min-height: 44px !important;
+  padding: 19px 0 !important;
+}
+input[type=range]::-webkit-slider-thumb {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+/* Strip chips */
+.strip-chip {
+  height: 36px !important;
+  font-size: 11px !important;
+  padding: 0 14px !important;
+}
+
+/* Tab bar labels */
+.tab-btn {
+  font-size: 10px !important;
+  min-height: 60px !important;
+}
+.tab-icon { font-size: 20px !important; }
+
+/* Drawer handle area — bigger tap target */
+.drawer-handle-bar { padding: 14px 0 8px !important; }
+
+/* Meta rows */
+.meta-key { font-size: 11px !important; }
+.meta-val { font-size: 11px !important; }
+
+/* Export options grid */
+.export-opt { padding: 16px 8px !important; }
+.export-opt-icon { font-size: 26px !important; }
+.export-opt-label { font-size: 10px !important; }
+
+/* Top bar export button */
+.export-btn-top { height: 38px !important; font-size: 14px !important; padding: 0 16px !important; }
+
+/* Playback controls row — more breathing room */
+.playback-controls { gap: 12px !important; padding: 12px 0 16px !important; }
+
+/* Upload button */
+.upload-btn { font-size: 18px !important; padding: 16px 36px !important; border-radius: 12px !important; }
+.upload-title { font-size: 24px !important; }
+.upload-sub { font-size: 12px !important; line-height: 2 !important; }
+
+/* Scrub bar — bigger touch target */
+.scrub-bar-track { height: 8px !important; }
+.scrub-thumb { width: 22px !important; height: 22px !important; }
+
+/* Clip grid — bigger cards on mobile */
+.clip-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+.clip-thumb { height: 70px !important; }
+.clip-name { font-size: 10px !important; }
+.clip-time { font-size: 10px !important; }
+
+/* Drawer content padding */
+.drawer-content { padding: 14px 14px 24px !important; }
+
+/* Ensure drawer half height is tall enough */
+.drawer.half { height: 420px !important; }
+
+/* Toast position above tabbar */
+.toast { bottom: 90px !important; font-size: 12px !important; }
+
+
+/* ══════════════════════════════════════
+   FRAME DIAL — PRISM v1.2
+══════════════════════════════════════ */
+.frame-dial-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 4px;
+}
+.frame-dial-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+.frame-dial-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  justify-content: center;
+}
+/* The dial itself */
+.frame-dial {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 2px solid var(--violet-dim);
+  position: relative;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 0 0 1px rgba(176,96,255,0.1), inset 0 0 20px rgba(176,96,255,0.05);
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+.frame-dial:active { cursor: grabbing; border-color: var(--violet); }
+.frame-dial-notch {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 18px;
+  background: var(--violet);
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(176,96,255,0.6);
+  transform-origin: bottom center;
+}
+.frame-dial-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--violet);
+  box-shadow: 0 0 8px rgba(176,96,255,0.5);
+}
+/* Dial info readout */
+.dial-readout {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--violet);
+  letter-spacing: 2px;
+  text-align: center;
+  min-width: 70px;
+}
+.dial-frame-big {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 22px;
+  color: var(--violet);
+  letter-spacing: 2px;
+  line-height: 1;
+}
+.dial-frame-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+/* Step size selector */
+.dial-step-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.dial-step-btn {
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border-v);
+  background: var(--bg-surface);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 34px;
+}
+.dial-step-btn.active {
+  background: rgba(176,96,255,0.15);
+  border-color: var(--violet);
+  color: var(--violet);
+}
+/* Frame slider */
+.frame-slider-wrap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+}
+.frame-slider-wrap input[type=range] {
+  flex: 1;
+  min-height: 44px;
+  accent-color: var(--violet);
+}
+.frame-slider-time {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--violet);
+  min-width: 64px;
+  text-align: right;
+}
+
+
+/* ══ FORCE MOBILE RENDERING ══════════════════
+   Prevents browser from choosing desktop layout.
+   Works on iOS Safari, Android Chrome, Samsung.
+═════════════════════════════════════════════ */
+html {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+}
+/* Nothing should ever be wider than the screen */
+* {
+  max-width: 100vw;
+}
+/* Except absolutely/fixed positioned elements */
+[style*="position:fixed"],
+[style*="position: fixed"],
+.drawer, .toast, .topbar {
+  max-width: 100vw !important;
+}
+
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <button class="icon-btn" onclick="document.getElementById('newFileInput').click()" title="Load new video">📂</button>
+    <input type="file" id="newFileInput" accept="video/*" style="display:none">
+  </div>
+  <div class="topbar-center">
+    <div class="app-title">PRISM</div>
+    <div class="suite-label">SPECTRA SUITE · FORENSIC VIDEO</div>
+  </div>
+  <div class="topbar-right">
+    <span class="status-badge" id="statusBadge">READY</span>
+    <button class="export-btn-top" id="topExportBtn" onclick="exportCurrentFrame()" disabled>SAVE</button>
+  </div>
+</div>
+
+<!-- QUICK STRIP -->
+<div class="quick-strip" id="quickStrip">
+  <div class="strip-chip active" id="chipZoom" onclick="toggleZoom()">🔍 ZOOM</div>
+  <div class="strip-chip" id="chipSplit" onclick="toggleSplit()">⧢ SPLIT</div>
+  <div class="strip-chip" id="chipLoop" onclick="toggleLoop()">🔁 LOOP</div>
+  <div class="strip-chip" id="chipTimestamp" onclick="toggleTimestamp()">🕐 TIME</div>
+  <div class="strip-chip" id="chipEnhance" onclick="applyEnhance()">⚡ ENHANCE</div>
+  <div class="strip-divider"></div>
+  <div class="strip-chip" onclick="stepFrame(-1)">⏮ PREV</div>
+  <div class="strip-chip" onclick="stepFrame(1)">NEXT ⏭</div>
+</div>
+
+<!-- SCRUBBER -->
+<div class="scrub-wrap" id="scrubWrap">
+  <div class="scrub-bar-track" id="scrubTrack" ontouchstart="scrubStart(event)" ontouchmove="scrubMove(event)" ontouchend="scrubEnd(event)" onclick="scrubClick(event)">
+    <div class="scrub-bar-fill" id="scrubFill"></div>
+    <div class="loop-region" id="loopRegion"></div>
+    <div class="scrub-thumb" id="scrubThumb"></div>
+  </div>
+</div>
+
+<!-- WORKSPACE -->
+<div class="workspace-area" id="workspaceArea">
+  <!-- Upload overlay -->
+  <div id="uploadOverlay">
+    <div class="upload-icon">🎬</div>
+    <div class="upload-title">PRISM</div>
+    <div class="upload-sub">FORENSIC VIDEO ANALYSIS<br>TAP TO LOAD · MP4 · MOV · WEBM · AVI</div>
+    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">LOAD VIDEO</button>
+    <input type="file" id="fileInput" accept="video/*" style="display:none">
+    <div id="uploadStatus">
+      <div class="upload-progress-bar"><div class="upload-progress-fill" id="uploadProgressFill"></div></div>
+      <div id="uploadStatusText"></div>
+    </div>
+  </div>
+
+  <!-- Video element -->
+  <video id="videoEl" playsinline webkit-playsinline></video>
+  <!-- Frame canvas (for filters/freeze) -->
+  <canvas id="frameCanvas"></canvas>
+  <!-- Split canvas -->
+  <canvas id="splitCanvas"></canvas>
+  <!-- Split divider -->
+  <div class="split-divider" id="splitDivider"><div class="split-handle">⟺</div></div>
+  <!-- Zoom loupe -->
+  <div id="zoomLoupe"><canvas id="zoomLoupeCanvas"></canvas></div>
+  <!-- Overlays -->
+  <div class="time-overlay" id="timeOverlay" style="display:none">00:00.000</div>
+  <div class="frame-counter" id="frameCounter" style="display:none">F:0</div>
+  <!-- Progress -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label" id="progressLabel">PROCESSING...</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+</div>
+
+<!-- TAB BAR -->
+<div class="tabbar" id="tabbar">
+  <button class="tab-btn active" id="tab-analyze" onclick="openTab('analyze')">
+    <span class="tab-icon">📊</span>ANALYZE
+  </button>
+  <button class="tab-btn" id="tab-enhance" onclick="openTab('enhance')">
+    <span class="tab-icon">⚡</span>ENHANCE
+  </button>
+  <button class="tab-btn" id="tab-clips" onclick="openTab('clips')">
+    <span class="tab-icon">🎞</span>CLIPS
+  </button>
+  <button class="tab-btn" id="tab-export" onclick="openTab('export')">
+    <span class="tab-icon">💾</span>EXPORT
+  </button>
+</div>
+
+<!-- DRAWER -->
+<div class="drawer" id="drawer">
+  <div class="drawer-handle-bar" onclick="cycleDrawer()">
+    <div class="drawer-handle"></div>
+  </div>
+  <div class="drawer-content">
+
+    <!-- ANALYZE PANE -->
+    <div class="drawer-pane active" id="pane-analyze">
+      <div class="section-label">PLAYBACK</div>
+      <div class="playback-controls">
+        <button class="frame-btn" onclick="stepFrame(-10)">⏪</button>
+        <button class="frame-btn" onclick="stepFrame(-1)">◁</button>
+        <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+        <button class="frame-btn" onclick="stepFrame(1)">▷</button>
+        <button class="frame-btn" onclick="stepFrame(10)">⏩</button>
+      </div>
+
+      <div class="section-label">FRAME DIAL</div>
+      <div class="frame-dial-wrap">
+        <div class="frame-dial-row">
+          <div>
+            <div class="dial-frame-big" id="dialFrameNum">0</div>
+            <div class="dial-frame-label">FRAME</div>
+          </div>
+          <div class="frame-dial" id="frameDial"
+            ontouchstart="dialTouchStart(event)"
+            ontouchmove="dialTouchMove(event)"
+            ontouchend="dialTouchEnd(event)"
+            onmousedown="dialMouseDown(event)">
+            <div class="frame-dial-notch" id="dialNotch"
+              style="transform-origin:bottom center;"></div>
+            <div class="frame-dial-center"></div>
+          </div>
+          <div class="dial-readout" id="dialTimeReadout">0:00.000</div>
+        </div>
+        <div class="dial-step-row">
+          <div class="dial-step-btn active" id="dstep1" onclick="setDialStep(1,this)">1F</div>
+          <div class="dial-step-btn" id="dstep5" onclick="setDialStep(5,this)">5F</div>
+          <div class="dial-step-btn" id="dstep10" onclick="setDialStep(10,this)">10F</div>
+          <div class="dial-step-btn" id="dstep30" onclick="setDialStep(30,this)">30F</div>
+        </div>
+      </div>
+
+      <div class="section-label">FRAME SCRUB</div>
+      <div class="frame-slider-wrap">
+        <span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--dim);">0</span>
+        <input type="range" id="frameSlider" min="0" max="1000" value="0"
+          oninput="frameSliderInput(this)"
+          ontouchstart="frameSliderTouchStart()"
+          ontouchend="frameSliderTouchEnd()">
+        <span class="frame-slider-time" id="frameSliderTime">0:00.000</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">SPEED</span>
+        <div style="display:flex;gap:6px;flex:1;flex-wrap:wrap;">
+          <div class="speed-pill active" id="sp025" onclick="setSpeed(0.25)">0.25×</div>
+          <div class="speed-pill" id="sp05" onclick="setSpeed(0.5)">0.5×</div>
+          <div class="speed-pill" id="sp1" onclick="setSpeed(1)">1×</div>
+          <div class="speed-pill" id="sp15" onclick="setSpeed(1.5)">1.5×</div>
+          <div class="speed-pill" id="sp2" onclick="setSpeed(2)">2×</div>
+        </div>
+      </div>
+      <div class="section-label">VIDEO INFO</div>
+      <div class="meta-row"><span class="meta-key">FILE</span><span class="meta-val" id="metaFile">—</span></div>
+      <div class="meta-row"><span class="meta-key">DURATION</span><span class="meta-val" id="metaDur">—</span></div>
+      <div class="meta-row"><span class="meta-key">RESOLUTION</span><span class="meta-val" id="metaRes">—</span></div>
+      <div class="meta-row"><span class="meta-key">FRAME EST.</span><span class="meta-val" id="metaFps">—</span></div>
+      <div class="meta-row"><span class="meta-key">CURRENT TIME</span><span class="meta-val" id="metaTime">—</span></div>
+      <div class="meta-row"><span class="meta-key">CURRENT FRAME</span><span class="meta-val" id="metaFrame">—</span></div>
+      <div class="section-label">LOOP REGION</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">LOOP IN</span>
+        <span class="ctrl-val" id="loopInVal">—</span>
+        <button class="action-btn" style="flex:1;margin:0;padding:8px;" onclick="setLoopIn()">SET IN</button>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">LOOP OUT</span>
+        <span class="ctrl-val" id="loopOutVal">—</span>
+        <button class="action-btn" style="flex:1;margin:0;padding:8px;" onclick="setLoopOut()">SET OUT</button>
+      </div>
+      <button class="action-btn" onclick="clearLoop()">✕ CLEAR LOOP</button>
+      <div class="section-label">AI FRAME ANALYSIS</div>
+      <button class="action-btn primary" onclick="describeFrame()">🤖 DESCRIBE CURRENT FRAME</button>
+      <div class="ai-result" id="aiResult"></div>
+    </div>
+
+    <!-- ENHANCE PANE -->
+    <div class="drawer-pane" id="pane-enhance">
+      <div class="section-label">VISUAL FILTERS</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">BRIGHTNESS</span>
+        <input type="range" id="sBrightness" min="-100" max="100" value="0" oninput="updateFilter()">
+        <span class="ctrl-val" id="vBrightness">0</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">CONTRAST</span>
+        <input type="range" id="sContrast" min="-100" max="100" value="0" oninput="updateFilter()">
+        <span class="ctrl-val" id="vContrast">0</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">SATURATION</span>
+        <input type="range" id="sSaturation" min="-100" max="100" value="0" oninput="updateFilter()">
+        <span class="ctrl-val" id="vSaturation">0</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">SHARPEN</span>
+        <input type="range" id="sSharpen" min="0" max="100" value="0" oninput="updateFilter()">
+        <span class="ctrl-val" id="vSharpen">0</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">DENOISE</span>
+        <input type="range" id="sDenoise" min="0" max="100" value="0" oninput="updateFilter()">
+        <span class="ctrl-val" id="vDenoise">0</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">SHADOWS</span>
+        <input type="range" id="sShadows" min="-100" max="100" value="0" oninput="updateFilter()">
+        <span class="ctrl-val" id="vShadows">0</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">HIGHLIGHTS</span>
+        <input type="range" id="sHighlights" min="-100" max="100" value="0" oninput="updateFilter()">
+        <span class="ctrl-val" id="vHighlights">0</span>
+      </div>
+      <div class="section-label">PRESETS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="action-btn" onclick="applyPreset('enhance')">🔆 ENHANCE</button>
+        <button class="action-btn" onclick="applyPreset('night')">🌙 NIGHT SHOT</button>
+        <button class="action-btn" onclick="applyPreset('plate')">🚘 LICENSE PLATE</button>
+        <button class="action-btn" onclick="applyPreset('face')">👤 FACE DETAIL</button>
+        <button class="action-btn" onclick="applyPreset('forensic')">🔬 FORENSIC</button>
+        <button class="action-btn" onclick="applyPreset('reset')">↺ RESET</button>
+      </div>
+      <div class="section-label">APPLY TO FRAME</div>
+      <button class="action-btn primary" id="applyFrameBtn" onclick="applyEnhance()" disabled>⚡ CAPTURE ENHANCED FRAME</button>
+    </div>
+
+    <!-- CLIPS PANE -->
+    <div class="drawer-pane" id="pane-clips">
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button class="action-btn" style="flex:1;margin:0;" onclick="captureFrame()">📸 CAPTURE FRAME</button>
+        <button class="action-btn" style="flex:1;margin:0;" onclick="exportSelectedFrame()" id="exportSelBtn" disabled>💾 SAVE SELECTED</button>
+      </div>
+      <div class="clip-grid" id="clipGrid">
+        <div class="empty-state" style="grid-column:1/-1">NO FRAMES CAPTURED<br>TAP CAPTURE TO SAVE</div>
+      </div>
+    </div>
+
+    <!-- EXPORT PANE -->
+    <div class="drawer-pane" id="pane-export">
+      <div class="section-label">EXPORT FORMAT</div>
+      <div class="export-grid">
+        <div class="export-opt active" id="expPNG" onclick="setExportFmt('png')">
+          <span class="export-opt-icon">🖼</span>
+          <span class="export-opt-label">PNG FRAME</span>
+        </div>
+        <div class="export-opt" id="expJPEG" onclick="setExportFmt('jpeg')">
+          <span class="export-opt-icon">📷</span>
+          <span class="export-opt-label">JPEG FRAME</span>
+        </div>
+        <div class="export-opt" id="expSequence" onclick="setExportFmt('sequence')">
+          <span class="export-opt-icon">🎞</span>
+          <span class="export-opt-label">FRAME BURST</span>
+        </div>
+        <div class="export-opt" id="expAudio" onclick="setExportFmt('audio')">
+          <span class="export-opt-icon">🔊</span>
+          <span class="export-opt-label">AUDIO TRACK</span>
+        </div>
+      </div>
+      <div class="section-label">TIMESTAMP EMBED</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">OVERLAY</span>
+        <div class="strip-chip" id="tsChip" onclick="toggleTimestamp()" style="margin:0;">OFF</div>
+      </div>
+      <div class="section-label">ACTIONS</div>
+      <button class="action-btn primary" id="exportBtn" onclick="exportCurrentFrame()" disabled>💾 EXPORT CURRENT FRAME</button>
+      <button class="action-btn" id="exportBurstBtn" onclick="exportFrameBurst()" disabled>🎞 EXPORT FRAME BURST (±5)</button>
+      <button class="action-btn" id="exportAudioBtn" onclick="extractAudio()" disabled>🔊 EXTRACT AUDIO TRACK</button>
+      <button class="action-btn danger" onclick="resetAll()">✕ RESET ALL</button>
+    </div>
+
+  </div><!-- drawer-content -->
+</div><!-- drawer -->
+
+<script>
+// ── STATE ─────────────────────────────────────────────────
+let videoLoaded=false, isPlaying=false, currentSpeed=1;
+let zoomActive=false, splitActive=false, loopActive=false, timestampActive=false;
+let loopIn=null, loopOut=null;
+let frames=[], selectedFrameId=null;
+let exportFmt='png';
+let filterState={brightness:0,contrast:0,saturation:0,sharpen:0,denoise:0,shadows:0,highlights:0};
+let scrubbing=false;
+let animFrameId=null;
+let estFps=30;
+
+const video=document.getElementById('videoEl');
+
+// ── INIT ──────────────────────────────────────────────────
+function initVideo(file){
+  const url=URL.createObjectURL(file);
+  video.src=url;
+  video.load();
+  video.onloadedmetadata=()=>{
+    videoLoaded=true;
+    document.getElementById('uploadOverlay').style.display='none';
+    video.style.display='block';
+    document.getElementById('quickStrip').style.display='flex';
+    document.getElementById('scrubWrap').style.display='block';
+    document.getElementById('tabbar').style.display='flex';
+    document.getElementById('drawer').style.display='flex';
+    document.getElementById('drawer').className='drawer half';
+    document.getElementById('timeOverlay').style.display='block';
+    document.getElementById('frameCounter').style.display='block';
+    document.getElementById('topExportBtn').disabled=false;
+    document.getElementById('exportBtn').disabled=false;
+    document.getElementById('exportBurstBtn').disabled=false;
+    document.getElementById('exportAudioBtn').disabled=false;
+    document.getElementById('applyFrameBtn').disabled=false;
+    // detect resolution
+    const W=video.videoWidth, H=video.videoHeight;
+    document.getElementById('metaFile').textContent=file.name.length>22?file.name.substring(0,20)+'..':file.name;
+    document.getElementById('metaDur').textContent=formatTime(video.duration);
+    document.getElementById('metaRes').textContent=W+'×'+H;
+    document.getElementById('metaFps').textContent='~'+estFps+' FPS';
+    setStatus('LOADED · '+W+'×'+H, true);
+    startTick();
+  };
+  video.ontimeupdate=updateScrubber;
+  video.onended=()=>{isPlaying=false;document.getElementById('playBtn').textContent='▶';setStatus('ENDED',false);};
+  // wire zoom loupe
+  document.getElementById('workspaceArea').addEventListener('mousemove',handleZoomMove);
+  document.getElementById('workspaceArea').addEventListener('touchmove',handleZoomTouch,{passive:true});
+}
+
+function startTick(){
+  if(animFrameId)cancelAnimationFrame(animFrameId);
+  function tick(){
+    updateTimeDisplay();
+    animFrameId=requestAnimationFrame(tick);
+  }
+  animFrameId=requestAnimationFrame(tick);
+}
+
+function updateTimeDisplay(){
+  if(!videoLoaded)return;
+  const t=video.currentTime, dur=video.duration||1;
+  document.getElementById('timeOverlay').textContent=formatTime(t);
+  const fn=Math.round(t*estFps);
+  document.getElementById('frameCounter').textContent='F:'+fn;
+  document.getElementById('metaTime').textContent=formatTime(t);
+  document.getElementById('metaFrame').textContent=fn;
+  // loop check
+  if(loopActive&&loopIn!==null&&loopOut!==null&&t>=loopOut){video.currentTime=loopIn;}
+}
+
+// ── PLAYBACK ──────────────────────────────────────────────
+function togglePlay(){
+  if(!videoLoaded)return;
+  if(isPlaying){video.pause();isPlaying=false;document.getElementById('playBtn').textContent='▶';setStatus('PAUSED',false);}
+  else{video.play();isPlaying=true;document.getElementById('playBtn').textContent='⏸';setStatus('PLAYING',true);}
+}
+
+function setSpeed(s){
+  currentSpeed=s;
+  video.playbackRate=s;
+  document.querySelectorAll('.speed-pill').forEach(p=>p.classList.remove('active'));
+  const ids={0.25:'sp025',0.5:'sp05',1:'sp1',1.5:'sp15',2:'sp2'};
+  const el=document.getElementById(ids[s]); if(el)el.classList.add('active');
+  showToast('SPEED: '+s+'×');
+}
+
+function stepFrame(n){
+  if(!videoLoaded)return;
+  if(isPlaying){video.pause();isPlaying=false;document.getElementById('playBtn').textContent='▶';}
+  video.currentTime=Math.max(0,Math.min(video.duration,video.currentTime+(n/estFps)));
+}
+
+// ── SCRUBBER ──────────────────────────────────────────────
+function updateScrubber(){
+  if(!videoLoaded||scrubbing)return;
+  const pct=(video.currentTime/video.duration)*100;
+  document.getElementById('scrubFill').style.width=pct+'%';
+  document.getElementById('scrubThumb').style.left=pct+'%';
+}
+function scrubClick(e){
+  if(!videoLoaded)return;
+  const track=document.getElementById('scrubTrack');
+  const rect=track.getBoundingClientRect();
+  const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  video.currentTime=pct*video.duration;
+}
+let scrubStartX=0,scrubStartTime=0;
+function scrubStart(e){scrubbing=true;scrubStartX=e.touches[0].clientX;scrubStartTime=video.currentTime;}
+function scrubMove(e){
+  if(!scrubbing||!videoLoaded)return;
+  const track=document.getElementById('scrubTrack');
+  const rect=track.getBoundingClientRect();
+  const pct=Math.max(0,Math.min(1,(e.touches[0].clientX-rect.left)/rect.width));
+  video.currentTime=pct*video.duration;
+}
+function scrubEnd(){scrubbing=false;}
+
+// ── ZOOM LOUPE ────────────────────────────────────────────
+function toggleZoom(){
+  zoomActive=!zoomActive;
+  document.getElementById('zoomLoupe').style.display=zoomActive?'block':'none';
+  document.getElementById('chipZoom').classList.toggle('active',zoomActive);
+  showToast(zoomActive?'ZOOM ON':'ZOOM OFF');
+}
+function handleZoomMove(e){
+  if(!zoomActive||!videoLoaded)return;
+  const area=document.getElementById('workspaceArea');
+  const rect=area.getBoundingClientRect();
+  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  drawLoupe(x,y,rect.width,rect.height);
+}
+function handleZoomTouch(e){
+  if(!zoomActive||!videoLoaded||!e.touches.length)return;
+  const area=document.getElementById('workspaceArea');
+  const rect=area.getBoundingClientRect();
+  const x=e.touches[0].clientX-rect.left, y=e.touches[0].clientY-rect.top;
+  drawLoupe(x,y,rect.width,rect.height);
+}
+function drawLoupe(x,y,areaW,areaH){
+  const loupe=document.getElementById('zoomLoupe');
+  const canvas=document.getElementById('zoomLoupeCanvas');
+  const size=130, zoomFactor=4, half=size/2;
+  loupe.style.left=(x-half)+'px';
+  loupe.style.top=(y-half)+'px';
+  canvas.width=size; canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  // map pixel position to video coords
+  const vW=video.videoWidth||areaW, vH=video.videoHeight||areaH;
+  const scaleX=vW/areaW, scaleY=vH/areaH;
+  const srcX=(x*scaleX)-(size/(2*zoomFactor)*scaleX);
+  const srcY=(y*scaleY)-(size/(2*zoomFactor)*scaleY);
+  const srcW=(size/zoomFactor)*scaleX;
+  const srcH=(size/zoomFactor)*scaleY;
+  try{ctx.drawImage(video,srcX,srcY,srcW,srcH,0,0,size,size);}catch(e){}
+  // crosshair
+  ctx.strokeStyle='rgba(176,96,255,0.7)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(half,0);ctx.lineTo(half,size);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,half);ctx.lineTo(size,half);ctx.stroke();
+}
+
+// ── SPLIT VIEW ────────────────────────────────────────────
+function toggleSplit(){
+  splitActive=!splitActive;
+  document.getElementById('chipSplit').classList.toggle('active',splitActive);
+  const div=document.getElementById('splitDivider');
+  const canvas=document.getElementById('splitCanvas');
+  div.style.display=splitActive?'block':'none';
+  canvas.style.display=splitActive?'block':'none';
+  if(splitActive){div.style.left='50%';captureSplitBaseline();}
+  showToast(splitActive?'SPLIT ON':'SPLIT OFF');
+}
+let splitBaseline=null;
+function captureSplitBaseline(){
+  const c=document.getElementById('splitCanvas');
+  const area=document.getElementById('workspaceArea');
+  c.width=area.offsetWidth; c.height=area.offsetHeight;
+  const ctx=c.getContext('2d');
+  try{ctx.drawImage(video,0,0,c.width,c.height);}catch(e){}
+  splitBaseline=ctx.getImageData(0,0,c.width,c.height);
+}
+// Split divider drag
+const splitDiv=document.getElementById('splitDivider');
+let draggingSplit=false;
+splitDiv.addEventListener('touchstart',()=>draggingSplit=true,{passive:true});
+document.addEventListener('touchmove',e=>{
+  if(!draggingSplit||!splitActive)return;
+  const area=document.getElementById('workspaceArea');
+  const rect=area.getBoundingClientRect();
+  const pct=Math.max(5,Math.min(95,((e.touches[0].clientX-rect.left)/rect.width)*100));
+  splitDiv.style.left=pct+'%';
+  drawSplitCanvas(pct/100);
+},{passive:true});
+document.addEventListener('touchend',()=>draggingSplit=false);
+function drawSplitCanvas(splitX){
+  if(!splitBaseline)return;
+  const c=document.getElementById('splitCanvas');
+  const ctx=c.getContext('2d');
+  ctx.putImageData(splitBaseline,0,0);
+  // draw live video right side
+  const x=Math.round(splitX*c.width);
+  ctx.save();ctx.beginPath();ctx.rect(x,0,c.width-x,c.height);ctx.clip();
+  try{ctx.drawImage(video,0,0,c.width,c.height);}catch(e){}
+  ctx.restore();
+}
+
+// ── LOOP ──────────────────────────────────────────────────
+function toggleLoop(){
+  loopActive=!loopActive;
+  document.getElementById('chipLoop').classList.toggle('active',loopActive);
+  showToast(loopActive?'LOOP ON':'LOOP OFF');
+  if(!loopActive)document.getElementById('loopRegion').style.display='none';
+  else if(loopIn!==null&&loopOut!==null)drawLoopRegion();
+}
+function setLoopIn(){
+  if(!videoLoaded)return;
+  loopIn=video.currentTime;
+  document.getElementById('loopInVal').textContent=formatTime(loopIn);
+  drawLoopRegion();showToast('LOOP IN: '+formatTime(loopIn));
+}
+function setLoopOut(){
+  if(!videoLoaded)return;
+  loopOut=video.currentTime;
+  document.getElementById('loopOutVal').textContent=formatTime(loopOut);
+  drawLoopRegion();showToast('LOOP OUT: '+formatTime(loopOut));
+}
+function clearLoop(){
+  loopIn=null;loopOut=null;loopActive=false;
+  document.getElementById('loopInVal').textContent='—';
+  document.getElementById('loopOutVal').textContent='—';
+  document.getElementById('loopRegion').style.display='none';
+  document.getElementById('chipLoop').classList.remove('active');
+}
+function drawLoopRegion(){
+  if(loopIn===null||loopOut===null)return;
+  const dur=video.duration||1;
+  const inPct=(loopIn/dur)*100, outPct=(loopOut/dur)*100;
+  const r=document.getElementById('loopRegion');
+  r.style.display='block';
+  r.style.left=inPct+'%';
+  r.style.width=(outPct-inPct)+'%';
+}
+
+// ── TIMESTAMP ─────────────────────────────────────────────
+function toggleTimestamp(){
+  timestampActive=!timestampActive;
+  document.getElementById('chipTimestamp').classList.toggle('active',timestampActive);
+  document.getElementById('tsChip').textContent=timestampActive?'ON':'OFF';
+  document.getElementById('tsChip').classList.toggle('active',timestampActive);
+  showToast(timestampActive?'TIMESTAMP ON':'TIMESTAMP OFF');
+}
+
+// ── FILTERS ───────────────────────────────────────────────
+function updateFilter(){
+  filterState={
+    brightness:parseInt(document.getElementById('sBrightness').value),
+    contrast:parseInt(document.getElementById('sContrast').value),
+    saturation:parseInt(document.getElementById('sSaturation').value),
+    sharpen:parseInt(document.getElementById('sSharpen').value),
+    denoise:parseInt(document.getElementById('sDenoise').value),
+    shadows:parseInt(document.getElementById('sShadows').value),
+    highlights:parseInt(document.getElementById('sHighlights').value),
+  };
+  document.getElementById('vBrightness').textContent=filterState.brightness;
+  document.getElementById('vContrast').textContent=filterState.contrast;
+  document.getElementById('vSaturation').textContent=filterState.saturation;
+  document.getElementById('vSharpen').textContent=filterState.sharpen;
+  document.getElementById('vDenoise').textContent=filterState.denoise;
+  document.getElementById('vShadows').textContent=filterState.shadows;
+  document.getElementById('vHighlights').textContent=filterState.highlights;
+  // apply CSS filter preview to video
+  const brt=1+(filterState.brightness/100);
+  const ctr=1+(filterState.contrast/100);
+  const sat=1+(filterState.saturation/100);
+  video.style.filter=`brightness(${brt}) contrast(${ctr}) saturate(${sat})`;
+}
+
+function applyPreset(name){
+  const presets={
+    enhance:{brightness:15,contrast:20,saturation:10,sharpen:40,denoise:0,shadows:10,highlights:-10},
+    night:{brightness:30,contrast:25,saturation:-20,sharpen:50,denoise:30,shadows:40,highlights:-20},
+    plate:{brightness:0,contrast:50,saturation:-80,sharpen:80,denoise:10,shadows:0,highlights:0},
+    face:{brightness:10,contrast:15,saturation:5,sharpen:30,denoise:20,shadows:15,highlights:-5},
+    forensic:{brightness:5,contrast:40,saturation:-60,sharpen:60,denoise:5,shadows:20,highlights:-15},
+    reset:{brightness:0,contrast:0,saturation:0,sharpen:0,denoise:0,shadows:0,highlights:0},
+  };
+  const p=presets[name]||presets.reset;
+  Object.keys(p).forEach(k=>{
+    const el=document.getElementById('s'+k.charAt(0).toUpperCase()+k.slice(1));
+    if(el)el.value=p[k];
+  });
+  updateFilter();
+  showToast('PRESET: '+name.toUpperCase());
+}
+
+function applyEnhance(){
+  if(!videoLoaded)return;
+  applyPreset('enhance');
+  showToast('AUTO-ENHANCE APPLIED');
+}
+
+// ── FRAME CAPTURE ─────────────────────────────────────────
+function captureFrame(){
+  if(!videoLoaded)return;
+  const canvas=document.createElement('canvas');
+  canvas.width=video.videoWidth||640; canvas.height=video.videoHeight||360;
+  const ctx=canvas.getContext('2d');
+  // apply filters
+  const brt=1+(filterState.brightness/100);
+  const ctr=1+(filterState.contrast/100);
+  const sat=1+(filterState.saturation/100);
+  ctx.filter=`brightness(${brt}) contrast(${ctr}) saturate(${sat})`;
+  try{ctx.drawImage(video,0,0,canvas.width,canvas.height);}catch(e){showToast('CAPTURE ERROR');return;}
+  // timestamp embed
+  if(timestampActive){
+    ctx.filter='none';
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(6,canvas.height-28,160,22);
+    ctx.fillStyle='#b060ff';ctx.font='bold 12px Share Tech Mono';
+    ctx.fillText('PRISM · '+formatTime(video.currentTime),10,canvas.height-12);
+  }
+  const id='f_'+Date.now();
+  const thumb=canvas.toDataURL('image/jpeg',0.5);
+  const full=canvas.toDataURL('image/png');
+  frames.push({id,time:video.currentTime,thumb,full,name:'FRAME_'+frames.length.toString().padStart(3,'0')});
+  renderFrameGrid();
+  showToast('FRAME CAPTURED: '+formatTime(video.currentTime));
+}
+
+function renderFrameGrid(){
+  const grid=document.getElementById('clipGrid');
+  if(!frames.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1">NO FRAMES CAPTURED<br>TAP CAPTURE TO SAVE</div>';return;}
+  grid.innerHTML=frames.map(f=>`
+    <div class="clip-card ${selectedFrameId===f.id?'selected':''}" onclick="selectFrame('${f.id}')">
+      <img class="clip-thumb" src="${f.thumb}" alt="">
+      <div class="clip-name">${f.name}</div>
+      <div class="clip-time">${formatTime(f.time)}</div>
+      <button class="clip-del" onclick="deleteFrame(event,'${f.id}')">×</button>
+    </div>
+  `).join('');
+}
+
+function selectFrame(id){
+  selectedFrameId=id;
+  renderFrameGrid();
+  document.getElementById('exportSelBtn').disabled=false;
+}
+function deleteFrame(e,id){
+  e.stopPropagation();
+  frames=frames.filter(f=>f.id!==id);
+  if(selectedFrameId===id){selectedFrameId=null;document.getElementById('exportSelBtn').disabled=true;}
+  renderFrameGrid();
+}
+function exportSelectedFrame(){
+  const f=frames.find(x=>x.id===selectedFrameId);
+  if(!f)return;
+  const a=document.createElement('a');a.href=f.full;a.download='PRISM_'+f.name+'.png';a.click();
+}
+
+// ── EXPORT ────────────────────────────────────────────────
+function setExportFmt(fmt){
+  exportFmt=fmt;
+  ['PNG','JPEG','Sequence','Audio'].forEach(f=>document.getElementById('exp'+f).classList.remove('active'));
+  const ids={png:'expPNG',jpeg:'expJPEG',sequence:'expSequence',audio:'expAudio'};
+  const el=document.getElementById(ids[fmt]);if(el)el.classList.add('active');
+}
+
+function exportCurrentFrame(){
+  if(!videoLoaded)return;
+  if(exportFmt==='audio'){extractAudio();return;}
+  if(exportFmt==='sequence'){exportFrameBurst();return;}
+  captureFrame();
+  // auto-export last captured
+  setTimeout(()=>{
+    const f=frames[frames.length-1];if(!f)return;
+    const a=document.createElement('a');
+    a.href=f.full;
+    a.download='PRISM_'+formatTime(video.currentTime).replace(/[:.]/g,'_')+'.'+(exportFmt==='jpeg'?'jpg':'png');
+    a.click();
+  },100);
+}
+
+function exportFrameBurst(){
+  if(!videoLoaded)return;
+  const t=video.currentTime;
+  const times=[t-10/estFps,t-5/estFps,t,t+5/estFps,t+10/estFps].map(x=>Math.max(0,Math.min(video.duration,x)));
+  let i=0;
+  function grabNext(){
+    if(i>=times.length)return;
+    video.currentTime=times[i++];
+    setTimeout(()=>{captureFrame();grabNext();},150);
+  }
+  grabNext();
+  showToast('BURST CAPTURE: 5 FRAMES');
+}
+
+function extractAudio(){
+  if(!videoLoaded){showToast('LOAD A VIDEO FIRST');return;}
+  // Web Audio API: re-decode and export
+  showToast('AUDIO: USE SPECTRA FOR DEEP ANALYSIS');
+  // Provide basic message since we can't transcode in-browser
+  setTimeout(()=>{
+    alert('PRISM AUDIO TIP:\nFor full audio extraction and forensic analysis, open this video in SPECTRA — the dedicated audio engine.\n\nPRISM captures video frames; SPECTRA handles audio waveforms, filters, and transcription.');
+  },300);
+}
+
+// ── AI FRAME DESCRIPTION ──────────────────────────────────
+async function describeFrame(){
+  if(!videoLoaded)return;
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.min(video.videoWidth||640,640);
+  canvas.height=Math.min(video.videoHeight||360,360);
+  const ctx=canvas.getContext('2d');
+  try{ctx.drawImage(video,0,0,canvas.width,canvas.height);}catch(e){return;}
+  const base64=canvas.toDataURL('image/jpeg',0.7).split(',')[1];
+  const resultEl=document.getElementById('aiResult');
+  resultEl.classList.add('visible');
+  resultEl.textContent='ANALYZING FRAME...';
+  setStatus('ANALYZING...',true);
+  try{
+    const response=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',max_tokens:1000,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
+          {type:'text',text:'This is a frame from a forensic video. Describe everything visible in detail: people, objects, license plates, text, facial features, clothing, lighting conditions, location indicators, and anything potentially significant for an investigation. Be precise and objective.'}
+        ]}]
+      })
+    });
+    if(!response.ok)throw new Error('API error');
+    const data=await response.json();
+    const txt=data.content?.[0]?.text||'No description returned.';
+    resultEl.textContent=txt;
+    setStatus('FRAME ANALYZED',true);
+  }catch(err){
+    resultEl.textContent='AI analysis unavailable. Check network connection.';
+    setStatus('ERROR',false);
+  }
+}
+
+// ── DRAWER ────────────────────────────────────────────────
+function cycleDrawer(){
+  const d=document.getElementById('drawer');
+  if(d.classList.contains('half'))d.className='drawer full';
+  else if(d.classList.contains('full'))d.className='drawer collapsed';
+  else d.className='drawer half';
+}
+function openTab(name){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.drawer-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.getElementById('pane-'+name).classList.add('active');
+  const d=document.getElementById('drawer');
+  if(d.classList.contains('collapsed'))d.className='drawer half';
+}
+
+// ── HELPERS ───────────────────────────────────────────────
+function setStatus(msg,state){
+  const el=document.getElementById('statusBadge');if(!el)return;
+  el.textContent=msg;el.className='status-badge';
+  if(state===true)el.classList.add('active');
+  if(state==='playing')el.classList.add('playing');
+  if(state==='processing')el.classList.add('processing');
+}
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),1800);
+}
+function formatTime(s){
+  if(!s||isNaN(s))return'0:00.000';
+  const m=Math.floor(s/60),sec=(s%60).toFixed(3).padStart(6,'0');
+  return`${m}:${sec}`;
+}
+function resetAll(){
+  applyPreset('reset');frames=[];selectedFrameId=null;
+  loopIn=null;loopOut=null;loopActive=false;
+  renderFrameGrid();
+  document.getElementById('loopInVal').textContent='—';
+  document.getElementById('loopOutVal').textContent='—';
+  document.getElementById('loopRegion').style.display='none';
+  showToast('ALL RESET');
+}
+
+// ── FILE INPUT WIRING ─────────────────────────────────────
+function wireInputs(){
+  document.getElementById('fileInput').onchange=e=>{const f=e.target.files[0];if(f)initVideo(f);e.target.value='';};
+  document.getElementById('newFileInput').onchange=e=>{const f=e.target.files[0];if(f){video.pause();isPlaying=false;initVideo(f);}e.target.value='';};
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wireInputs);
+else wireInputs();
+
+// ══════════════════════════════════════════════
+// EVIDENCE PERSISTENCE & NAVIGATION GUARD
+// Prevents evidence loss on page reload,
+// desktop/mobile toggle, and orientation change
+// ══════════════════════════════════════════════
+
+// 1. BEFOREUNLOAD — warn if evidence is loaded
+window.addEventListener('beforeunload', function(e) {
+  const hasEvidence = (
+    (typeof audioBuffer !== 'undefined' && audioBuffer) ||
+    (typeof imageLoaded !== 'undefined' && imageLoaded) ||
+    (typeof videoLoaded !== 'undefined' && videoLoaded)
+  );
+  if (hasEvidence) {
+    e.preventDefault();
+    e.returnValue = 'Evidence is loaded. Leaving will clear your session.';
+    return e.returnValue;
+  }
+});
+
+// 2. VISIBILITY CHANGE — warn when tab becomes hidden
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) return;
+  // Tab came back into view — check evidence still in memory
+  const hasEvidence = (
+    (typeof audioBuffer !== 'undefined' && audioBuffer) ||
+    (typeof imageLoaded !== 'undefined' && imageLoaded) ||
+    (typeof videoLoaded !== 'undefined' && videoLoaded)
+  );
+  if (!hasEvidence) {
+    showEvidenceLostBanner();
+  }
+});
+
+// 3. ORIENTATION CHANGE — reflow layout, preserve evidence
+window.addEventListener('orientationchange', function() {
+  setTimeout(function() {
+    // Trigger reflow on workspace
+    const wa = document.getElementById('workspaceArea') || document.getElementById('workspace');
+    if (wa) { wa.style.display='none'; wa.offsetHeight; wa.style.display=''; }
+    // Re-render canvas if image tool
+    if (typeof renderCanvas === 'function') renderCanvas();
+    if (typeof drawWaveform === 'function') drawWaveform();
+  }, 300);
+});
+
+// 4. RESIZE OBSERVER — detect desktop/mobile toggle (big sudden resize)
+let lastWidth = window.innerWidth;
+let resizeTimeout;
+window.addEventListener('resize', function() {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(function() {
+    const newWidth = window.innerWidth;
+    const delta = Math.abs(newWidth - lastWidth);
+    if (delta > 200) {
+      // Large layout shift = likely desktop/mobile toggle
+      const hasEvidence = (
+        (typeof audioBuffer !== 'undefined' && audioBuffer) ||
+        (typeof imageLoaded !== 'undefined' && imageLoaded) ||
+        (typeof videoLoaded !== 'undefined' && videoLoaded)
+      );
+      if (hasEvidence) {
+        showModeToggleWarning();
+      }
+    }
+    lastWidth = newWidth;
+  }, 250);
+});
+
+// ── BANNER: evidence lost after mode switch ──
+function showEvidenceLostBanner() {
+  let banner = document.getElementById('evidenceLostBanner');
+  if (banner) return; // already showing
+  banner = document.createElement('div');
+  banner.id = 'evidenceLostBanner';
+  banner.style.cssText = [
+    'position:fixed','top:0','left:0','right:0','z-index:9999',
+    'background:#ff3d6b','color:#fff',
+    'font-family:Share Tech Mono,monospace','font-size:13px','letter-spacing:2px',
+    'padding:14px 16px','text-align:center',
+    'display:flex','align-items:center','justify-content:space-between','gap:12px'
+  ].join(';');
+  banner.innerHTML = [
+    '<span>⚠ EVIDENCE CLEARED — page was reloaded or mode was switched. Reload your file.</span>',
+    '<button onclick="dismissBanner()" ',
+    'style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.4);color:#fff;',
+    'font-family:Share Tech Mono,monospace;font-size:11px;letter-spacing:2px;',
+    'padding:8px 14px;border-radius:4px;cursor:pointer;white-space:nowrap;">RELOAD FILE</button>'
+  ].join('');
+  document.body.prepend(banner);
+}
+
+// ── WARNING: mode toggle detected while evidence loaded ──
+function showModeToggleWarning() {
+  let warn = document.getElementById('modeToggleWarn');
+  if (warn) { warn.remove(); }
+  warn = document.createElement('div');
+  warn.id = 'modeToggleWarn';
+  warn.style.cssText = [
+    'position:fixed','top:0','left:0','right:0','z-index:9999',
+    'background:#ffb700','color:#000',
+    'font-family:Share Tech Mono,monospace','font-size:12px','letter-spacing:2px',
+    'padding:14px 16px','text-align:center',
+    'display:flex','align-items:center','justify-content:space-between','gap:12px'
+  ].join(';');
+  warn.innerHTML = [
+    '<span>⚠ LAYOUT CHANGE DETECTED — if evidence cleared, tap RELOAD FILE</span>',
+    '<button onclick="dismissWarnReload()" ',
+    'style="background:rgba(0,0,0,0.2);border:1px solid rgba(0,0,0,0.3);color:#000;',
+    'font-family:Share Tech Mono,monospace;font-size:11px;letter-spacing:2px;',
+    'padding:8px 14px;border-radius:4px;cursor:pointer;white-space:nowrap;">RELOAD FILE</button>',
+    '<button onclick="dismissWarn()" ',
+    'style="background:transparent;border:none;color:#000;font-size:18px;cursor:pointer;padding:4px 8px;">✕</button>'
+  ].join('');
+  document.body.prepend(warn);
+  // Auto-dismiss after 8 seconds if evidence still intact
+  setTimeout(function() {
+    const w = document.getElementById('modeToggleWarn');
+    if (w) w.remove();
+  }, 8000);
+}
+
+
+// ══════════════════════════════════════════════
+// FRAME DIAL ENGINE — PRISM v1.2
+// ══════════════════════════════════════════════
+let dialStep = 1;        // frames per tick
+let dialAngle = 0;       // current rotation degrees
+let dialDragging = false;
+let dialLastAngle = null;
+let dialAccum = 0;       // accumulated angle for sub-step precision
+
+function setDialStep(n, btn) {
+  dialStep = n;
+  document.querySelectorAll('.dial-step-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function getDialAngle(e, rect) {
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI);
+}
+
+function applyDialDelta(angleDelta) {
+  // 10 degrees per step (configurable feel)
+  const degsPerStep = 10;
+  dialAccum += angleDelta;
+  const steps = Math.trunc(dialAccum / degsPerStep);
+  if (steps !== 0) {
+    dialAccum -= steps * degsPerStep;
+    stepFrame(steps * dialStep);
+    if (navigator.vibrate) navigator.vibrate(8);
+  }
+  dialAngle = (dialAngle + angleDelta + 360) % 360;
+  const notch = document.getElementById('dialNotch');
+  if (notch) {
+    // notch sits at top, rotate around center of dial
+    notch.style.transform = 'translateX(-50%) rotate(' + dialAngle + 'deg)';
+    // override — notch-origin is bottom of notch at center of dial
+  }
+  updateDialReadout();
+}
+
+// Proper notch rotation around dial center
+function rotateDial(angle) {
+  dialAngle = ((angle % 360) + 360) % 360;
+  const notch = document.getElementById('dialNotch');
+  if (!notch) return;
+  // We place notch absolutely from top center; rotate via parent-relative transform
+  const dial = document.getElementById('frameDial');
+  if (dial) dial.style.setProperty('--notch-angle', dialAngle + 'deg');
+  notch.style.transform = 'translateX(-50%) rotate(' + dialAngle + 'deg)';
+}
+
+function updateDialReadout() {
+  if (!videoLoaded) return;
+  const fn = Math.round(video.currentTime * estFps);
+  document.getElementById('dialFrameNum').textContent = fn;
+  document.getElementById('dialTimeReadout').textContent = formatTime(video.currentTime);
+  // sync frame slider
+  const slider = document.getElementById('frameSlider');
+  if (slider && video.duration) {
+    slider.value = Math.round((video.currentTime / video.duration) * 1000);
+  }
+  document.getElementById('frameSliderTime').textContent = formatTime(video.currentTime);
+}
+
+// ── Touch events ──
+function dialTouchStart(e) {
+  e.preventDefault();
+  dialDragging = true;
+  dialAccum = 0;
+  const rect = document.getElementById('frameDial').getBoundingClientRect();
+  dialLastAngle = getDialAngle(e, rect);
+}
+function dialTouchMove(e) {
+  e.preventDefault();
+  if (!dialDragging) return;
+  const rect = document.getElementById('frameDial').getBoundingClientRect();
+  const angle = getDialAngle(e, rect);
+  let delta = angle - dialLastAngle;
+  // Handle wraparound
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  dialLastAngle = angle;
+  applyDialDelta(delta);
+}
+function dialTouchEnd(e) {
+  dialDragging = false;
+  dialLastAngle = null;
+}
+
+// ── Mouse events (desktop fallback) ──
+function dialMouseDown(e) {
+  dialDragging = true;
+  dialAccum = 0;
+  const rect = document.getElementById('frameDial').getBoundingClientRect();
+  dialLastAngle = getDialAngle(e, rect);
+  document.addEventListener('mousemove', dialMouseMove);
+  document.addEventListener('mouseup', dialMouseUp);
+}
+function dialMouseMove(e) {
+  if (!dialDragging) return;
+  const rect = document.getElementById('frameDial').getBoundingClientRect();
+  const angle = getDialAngle(e, rect);
+  let delta = angle - dialLastAngle;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  dialLastAngle = angle;
+  applyDialDelta(delta);
+}
+function dialMouseUp() {
+  dialDragging = false;
+  document.removeEventListener('mousemove', dialMouseMove);
+  document.removeEventListener('mouseup', dialMouseUp);
+}
+
+// ── Frame Slider ──
+let frameSliderActive = false;
+function frameSliderTouchStart() { frameSliderActive = true; }
+function frameSliderTouchEnd() { frameSliderActive = false; }
+function frameSliderInput(slider) {
+  if (!videoLoaded) return;
+  const pct = slider.value / 1000;
+  video.currentTime = pct * video.duration;
+  document.getElementById('frameSliderTime').textContent = formatTime(video.currentTime);
+  updateDialReadout();
+}
+
+// Hook into the existing updateTimeDisplay to keep dial in sync
+const _origUpdateTime = updateTimeDisplay;
+updateTimeDisplay = function() {
+  _origUpdateTime();
+  updateDialReadout();
+};
+
+
+// ── Banner/warn helper fns (avoids quote-in-string syntax error) ──
+function dismissBanner() {
+  var b = document.getElementById('evidenceLostBanner');
+  if (b) b.remove();
+  var fi = document.getElementById('fileInput');
+  if (fi) fi.click();
+}
+function dismissWarnReload() {
+  var w = document.getElementById('modeToggleWarn');
+  if (w) w.remove();
+  var fi = document.getElementById('fileInput');
+  if (fi) fi.click();
+}
+function dismissWarn() {
+  var w = document.getElementById('modeToggleWarn');
+  if (w) w.remove();
+}
+
+</script>
+</body>
+</html>
