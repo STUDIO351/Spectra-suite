@@ -1,8 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
+<style>
+/* ── HARD MOBILE LOCK ── */
+html, body {
+  width: 100% !important;
+  max-width: 100vw !important;
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+  -webkit-text-size-adjust: 100% !important;
+  text-size-adjust: 100% !important;
+}
+* {
+  box-sizing: border-box !important;
+  max-width: 100vw !important;
+  min-width: 0 !important;
+}
+img, video, iframe, canvas {
+  max-width: 100% !important;
+  height: auto;
+}
+/* Kill any fixed pixel widths that force desktop layout */
+.container, .inner, .hero-inner, .tools-inner,
+.features-inner, .usecases-inner, .pricing-inner,
+.footer-inner, .nav-inner {
+  width: 100% !important;
+  max-width: 100vw !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+/* Force all grids to single column on mobile */
+.tools-grid, .features-grid, .usecases-grid, .pricing-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  width: 100% !important;
+}
+/* Restore multi-col on real desktop */
+@media (min-width: 768px) {
+  .tools-grid    { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important; }
+  .features-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important; }
+  .usecases-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important; }
+  .pricing-grid  { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important; }
+}
+</style>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no">
 <title>SPECTRA SUITE — Forensic Intelligence Tools</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;1,300&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
@@ -571,7 +615,7 @@ footer { padding: 32px 16px; }
     <a href="#use-cases">USE CASES</a>
     <a href="#pricing">PRICING</a>
   </div>
-  <a href="SPECTRA_v4_6.html" class="nav-cta">LAUNCH APP →</a>
+  <a href="SPECTRA.html" class="nav-cta">LAUNCH APP →</a>
 </nav>
 
 <!-- HERO -->
@@ -585,7 +629,7 @@ footer { padding: 32px 16px; }
     Professional forensic audio, image, and video enhancement tools built for <strong>investigators, journalists, legal professionals</strong> and anyone who needs to hear and see what others tried to hide.
   </p>
   <div class="hero-actions">
-    <a href="SPECTRA_v4_6.html" class="btn-primary">LAUNCH SPECTRA →</a>
+    <a href="SPECTRA.html" class="btn-primary">LAUNCH SPECTRA →</a>
     <a href="#tools" class="btn-secondary">EXPLORE TOOLS</a>
   </div>
 
@@ -621,7 +665,7 @@ footer { padding: 32px 16px; }
   <div class="tools-grid">
 
     <!-- SPECTRA -->
-    <a href="SPECTRA_v4_6.html" class="tool-card reveal" style="--card-accent: #00e5ff;">
+    <a href="SPECTRA.html" class="tool-card reveal" style="--card-accent: #00e5ff;">
       <div class="tool-badge" style="border-color:#00e5ff;color:#00e5ff;">AUDIO</div>
       <div class="tool-name" style="color:#00e5ff;">SPECTRA</div>
       <div class="tool-version" style="color:#4a5a7a;">VERSION 6.0 — LIVE</div>
@@ -639,7 +683,7 @@ footer { padding: 32px 16px; }
     </a>
 
     <!-- LENS -->
-    <a href="#" class="tool-card reveal" style="--card-accent: #e8c84a;">
+    <a href="LENS.html" class="tool-card reveal" style="--card-accent: #e8c84a;">
       <div class="tool-badge" style="border-color:#e8c84a;color:#e8c84a;">IMAGE</div>
       <div class="tool-name" style="color:#e8c84a;">LENS</div>
       <div class="tool-version" style="color:#4a5a7a;">VERSION 3.0 — LIVE</div>
@@ -657,7 +701,7 @@ footer { padding: 32px 16px; }
     </a>
 
     <!-- PRISM -->
-    <a href="PRISM_v1_2.html" class="tool-card reveal" style="--card-accent: #b060ff;">
+    <a href="PRISM.html" class="tool-card reveal" style="--card-accent: #b060ff;">
       <div class="tool-badge" style="border-color:#b060ff;color:#b060ff;">VIDEO</div>
       <div class="tool-name" style="color:#b060ff;">PRISM</div>
       <div class="tool-version" style="color:#4a5a7a;">VERSION 1.0 — LIVE</div>
@@ -792,7 +836,7 @@ footer { padding: 32px 16px; }
           <div class="price-feature excluded">Batch processing</div>
           <div class="price-feature excluded">Priority support</div>
         </div>
-        <a href="SPECTRA_v4_6.html" class="price-btn outline">LAUNCH FREE →</a>
+        <a href="SPECTRA.html" class="price-btn outline">LAUNCH FREE →</a>
       </div>
 
       <div class="price-card featured reveal">
@@ -839,9 +883,9 @@ footer { padding: 32px 16px; }
   <div class="footer-logo">SPECTRA SUITE</div>
   <div class="footer-copy">© 2025 SPECTRA SUITE — FORENSIC INTELLIGENCE TOOLS</div>
   <div class="footer-links">
-    <a href="SPECTRA_v4_6.html">SPECTRA</a>
-    <a href="#">LENS</a>
-    <a href="PRISM_v1_2.html">PRISM</a>
+    <a href="SPECTRA.html">SPECTRA</a>
+    <a href="LENS.html">LENS</a>
+    <a href="PRISM.html">PRISM</a>
     <a href="#pricing">PRICING</a>
   </div>
 </footer>
