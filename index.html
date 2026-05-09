@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+<title>SPECTRA SUITE — Forensic Intelligence Tools</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;1,300&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #040507;
+  --text: #e8f0ff;
+  --dim: #6a7a9a;
+  --border: #141e30;
+  --cyan: #00e5ff;
+  --gold: #e8c84a;
+  --red: #ff3d6b;
+  --green: #39ff14;
+  --mono: 'Share Tech Mono', monospace;
+  --display: 'Bebas Neue', sans-serif;
+  --body: 'Barlow', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  overflow-x: hidden;
+  cursor: crosshair;
+}
+
+/* ── SCANLINE OVERLAY ── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none; z-index: 1000;
+}
+
+/* ── ANIMATED GRID BG ── */
+.grid-bg {
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: gridDrift 20s linear infinite;
+  pointer-events: none; z-index: 0;
+}
+@keyframes gridDrift { 0%{background-position:0 0} 100%{background-position:60px 60px} }
+
+/* Radial glow */
+.glow-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none; z-index: 0;
+}
+.glow-orb.cyan { width: 600px; height: 600px; background: rgba(0,229,255,0.06); top: -200px; left: -200px; }
+.glow-orb.gold { width: 500px; height: 500px; background: rgba(232,200,74,0.05); bottom: -100px; right: -100px; }
+
+/* ── NAV ── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(4,5,7,0.85);
+  backdrop-filter: blur(12px);
+}
+.nav-logo {
+  font-family: var(--display);
+  font-size: 22px;
+  letter-spacing: 6px;
+  color: var(--cyan);
+  text-shadow: 0 0 20px rgba(0,229,255,0.4);
+}
+.nav-logo span { color: var(--gold); }
+.nav-links { display: flex; gap: 28px; }
+.nav-links a {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--cyan); }
+.nav-cta {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  padding: 8px 20px;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  background: rgba(0,229,255,0.08);
+  text-decoration: none;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+.nav-cta:hover { background: rgba(0,229,255,0.18); box-shadow: 0 0 20px rgba(0,229,255,0.2); }
+
+/* ── HERO ── */
+.hero {
+  position: relative; z-index: 1;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 100px 32px 60px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 6px;
+  color: var(--gold);
+  margin-bottom: 24px;
+  animation: fadeUp 0.8s ease both;
+}
+
+.hero-title {
+  font-family: var(--display);
+  font-size: clamp(72px, 14vw, 160px);
+  letter-spacing: 12px;
+  line-height: 0.9;
+  color: var(--text);
+  text-shadow: 0 0 80px rgba(0,229,255,0.15);
+  animation: fadeUp 0.8s ease 0.1s both;
+}
+.hero-title .accent { color: var(--cyan); text-shadow: 0 0 40px rgba(0,229,255,0.5); }
+.hero-title .suite { color: var(--gold); font-size: 0.45em; letter-spacing: 20px; display: block; margin-top: 8px; }
+
+.hero-sub {
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--dim);
+  max-width: 560px;
+  line-height: 1.7;
+  margin: 28px auto 0;
+  letter-spacing: 0.5px;
+  animation: fadeUp 0.8s ease 0.2s both;
+}
+.hero-sub strong { color: var(--text); font-weight: 400; }
+
+.hero-actions {
+  display: flex; gap: 16px; margin-top: 44px; flex-wrap: wrap; justify-content: center;
+  animation: fadeUp 0.8s ease 0.35s both;
+}
+.btn-primary {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 3px;
+  padding: 16px 36px; background: var(--cyan); color: var(--bg);
+  border: none; border-radius: 2px; cursor: pointer; text-decoration: none;
+  font-weight: 700; transition: all 0.2s;
+  box-shadow: 0 0 30px rgba(0,229,255,0.3);
+}
+.btn-primary:hover { background: #33eeff; box-shadow: 0 0 50px rgba(0,229,255,0.5); transform: translateY(-2px); }
+.btn-secondary {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 3px;
+  padding: 16px 36px; background: transparent; color: var(--text);
+  border: 1px solid var(--border); border-radius: 2px; cursor: pointer; text-decoration: none;
+  transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: var(--gold); color: var(--gold); }
+
+/* Animated spectrum bars */
+.hero-spectrum {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  gap: 3px; height: 120px; overflow: hidden;
+  opacity: 0.3;
+}
+.spec-bar {
+  width: 4px; border-radius: 2px 2px 0 0;
+  background: linear-gradient(0deg, var(--cyan), transparent);
+  animation: specBar 1.5s ease-in-out infinite alternate;
+}
+@keyframes specBar { 0%{height:8px} 100%{height:var(--h)} }
+
+/* ── STATS BAR ── */
+.stats-bar {
+  position: relative; z-index: 1;
+  display: flex; justify-content: center; gap: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,229,255,0.02);
+  animation: fadeUp 0.8s ease 0.5s both;
+}
+.stat-item {
+  flex: 1; max-width: 220px;
+  padding: 28px 24px; text-align: center;
+  border-right: 1px solid var(--border);
+}
+.stat-item:last-child { border-right: none; }
+.stat-num {
+  font-family: var(--display);
+  font-size: 48px;
+  letter-spacing: 4px;
+  color: var(--cyan);
+  line-height: 1;
+}
+.stat-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--dim);
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+/* ── TOOLS SECTION ── */
+.tools-section {
+  position: relative; z-index: 1;
+  padding: 100px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.section-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 5px;
+  color: var(--gold);
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); max-width: 200px; }
+.section-heading {
+  font-family: var(--display);
+  font-size: clamp(36px, 6vw, 64px);
+  letter-spacing: 6px;
+  color: var(--text);
+  margin-bottom: 60px;
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  background: var(--border);
+}
+
+.tool-card {
+  background: var(--bg);
+  padding: 40px 36px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s;
+  cursor: pointer;
+  text-decoration: none;
+  display: block;
+}
+.tool-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--card-accent, var(--cyan));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s;
+}
+.tool-card:hover::before { transform: scaleX(1); }
+.tool-card:hover { background: #06080c; }
+.tool-card:hover .tool-arrow { transform: translateX(6px); opacity: 1; }
+
+.tool-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 3px;
+  padding: 4px 10px;
+  border: 1px solid;
+  border-radius: 2px;
+  display: inline-block;
+  margin-bottom: 20px;
+}
+.tool-name {
+  font-family: var(--display);
+  font-size: 52px;
+  letter-spacing: 8px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.tool-version {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin-bottom: 20px;
+}
+.tool-desc {
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--dim);
+  line-height: 1.7;
+  margin-bottom: 28px;
+}
+.tool-features {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 32px;
+}
+.tool-feature {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--dim);
+  display: flex; align-items: center; gap: 8px;
+}
+.tool-feature::before { content: '⬡'; font-size: 8px; }
+.tool-arrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  opacity: 0.4;
+  transition: all 0.3s;
+  display: flex; align-items: center; gap: 8px;
+}
+.tool-bg-text {
+  position: absolute;
+  bottom: -20px; right: -10px;
+  font-family: var(--display);
+  font-size: 120px;
+  letter-spacing: 10px;
+  opacity: 0.03;
+  pointer-events: none;
+  color: var(--card-accent, var(--cyan));
+}
+
+/* Coming soon card */
+.tool-card.coming-soon { opacity: 0.5; cursor: default; }
+.tool-card.coming-soon:hover { background: var(--bg); }
+.tool-card.coming-soon::before { display: none; }
+
+/* ── FEATURES SECTION ── */
+.features-section {
+  position: relative; z-index: 1;
+  padding: 80px 32px;
+  border-top: 1px solid var(--border);
+  background: rgba(0,229,255,0.01);
+}
+.features-inner { max-width: 1200px; margin: 0 auto; }
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  background: var(--border);
+  margin-top: 48px;
+}
+.feature-card {
+  background: var(--bg);
+  padding: 32px 28px;
+}
+.feature-icon { font-size: 28px; margin-bottom: 14px; }
+.feature-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.feature-desc {
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--dim);
+  line-height: 1.6;
+}
+
+/* ── USE CASES ── */
+.use-cases {
+  position: relative; z-index: 1;
+  padding: 80px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.use-case-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 48px;
+}
+.use-case-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 24px 20px;
+  border-radius: 2px;
+  transition: border-color 0.2s;
+}
+.use-case-card:hover { border-color: var(--gold); }
+.use-case-icon { font-size: 24px; margin-bottom: 10px; }
+.use-case-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.use-case-desc {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* ── PRICING ── */
+.pricing-section {
+  position: relative; z-index: 1;
+  padding: 80px 32px;
+  border-top: 1px solid var(--border);
+}
+.pricing-inner { max-width: 900px; margin: 0 auto; }
+.pricing-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  background: var(--border);
+  margin-top: 48px;
+}
+.price-card {
+  background: var(--bg);
+  padding: 36px 32px;
+  position: relative;
+}
+.price-card.featured {
+  background: #060a10;
+  box-shadow: inset 0 0 0 1px var(--cyan);
+}
+.price-badge {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 3px;
+  padding: 4px 10px; border-radius: 2px; display: inline-block; margin-bottom: 16px;
+}
+.price-name {
+  font-family: var(--display); font-size: 32px; letter-spacing: 4px;
+  color: var(--text); margin-bottom: 6px;
+}
+.price-amount {
+  font-family: var(--mono); font-size: 36px; color: var(--cyan);
+  margin-bottom: 4px; font-weight: 700;
+}
+.price-period { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 2px; margin-bottom: 24px; }
+.price-features { display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
+.price-feature { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+.price-feature.included { color: var(--text); }
+.price-feature.included::before { content: '✓'; color: var(--green); }
+.price-feature.excluded { opacity: 0.4; }
+.price-feature.excluded::before { content: '—'; }
+.price-btn {
+  width: 100%; padding: 13px; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 3px; cursor: pointer; border-radius: 2px; transition: all 0.2s;
+  text-align: center; text-decoration: none; display: block;
+}
+.price-btn.outline { border: 1px solid var(--border); background: transparent; color: var(--dim); }
+.price-btn.outline:hover { border-color: var(--cyan); color: var(--cyan); }
+.price-btn.solid { border: 1px solid var(--cyan); background: var(--cyan); color: var(--bg); font-weight: 700; }
+.price-btn.solid:hover { background: #33eeff; box-shadow: 0 0 20px rgba(0,229,255,0.3); }
+
+/* ── FOOTER ── */
+footer {
+  position: relative; z-index: 1;
+  padding: 40px 32px;
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 16px;
+}
+.footer-logo { font-family: var(--display); font-size: 18px; letter-spacing: 5px; color: var(--dim); }
+.footer-copy { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+.footer-links { display: flex; gap: 20px; }
+.footer-links a { font-family: var(--mono); font-size: 10px; color: var(--dim); text-decoration: none; letter-spacing: 1px; }
+.footer-links a:hover { color: var(--cyan); }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+.reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.reveal.visible { opacity: 1; transform: translateY(0); }
+
+/* Mobile */
+@media (max-width: 600px) {
+  nav { padding: 12px 16px; }
+  .nav-links { display: none; }
+  .hero { padding: 80px 20px 50px; }
+  .tools-section, .features-section, .pricing-section, .use-cases { padding: 60px 16px; }
+  .stats-bar { flex-wrap: wrap; }
+  .stat-item { min-width: 140px; }
+  footer { flex-direction: column; text-align: center; }
+}
+
+/* ══ SUITE MOBILE-FIRST OVERRIDES ════════════
+   Forces mobile layout on phones.
+   Desktop gets wider layout via min-width query.
+═════════════════════════════════════════════ */
+html {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+* { box-sizing: border-box; }
+img, video, canvas, iframe { max-width: 100%; }
+
+/* Nav: hide links on mobile, show hamburger space */
+.nav-links { display: none; }
+.nav-inner { padding: 0 16px; }
+
+/* Hero: tighter on mobile */
+.hero { padding: 80px 16px 48px; }
+.hero-title { font-size: clamp(48px, 14vw, 120px); letter-spacing: 6px; }
+.hero-sub { font-size: 15px; }
+.hero-actions { flex-direction: column; align-items: stretch; gap: 12px; }
+.hero-actions a, .hero-actions button { width: 100%; text-align: center; justify-content: center; }
+
+/* Stats bar wraps on mobile */
+.stats-bar { flex-wrap: wrap; padding: 20px 16px; gap: 0; }
+.stat-item { min-width: 50%; padding: 16px 12px; }
+
+/* Tools section */
+.tools-inner { padding: 60px 16px; }
+.tool-card { padding: 28px 20px; }
+.tool-name { font-size: clamp(36px, 10vw, 60px); }
+
+/* Features */
+.features-inner { padding: 60px 16px; }
+
+/* Use cases */
+.usecases-inner { padding: 60px 16px; }
+
+/* Pricing */
+.pricing-inner { padding: 60px 16px; }
+.pricing-grid { gap: 16px; }
+
+/* Footer */
+footer { padding: 32px 16px; }
+.footer-inner { flex-direction: column; gap: 24px; }
+.footer-links { flex-wrap: wrap; gap: 16px; }
+
+/* Desktop: restore multi-column at 700px+ */
+@media (min-width: 700px) {
+  .nav-links { display: flex; }
+  .tools-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important; }
+  .features-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important; }
+  .usecases-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important; }
+  .pricing-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important; }
+  .hero-actions { flex-direction: row; }
+  .stat-item { min-width: auto; }
+  .footer-inner { flex-direction: row; }
+}
+
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="glow-orb cyan"></div>
+<div class="glow-orb gold"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">SPECTRA<span> SUITE</span></div>
+  <div class="nav-links">
+    <a href="#tools">TOOLS</a>
+    <a href="#features">FEATURES</a>
+    <a href="#use-cases">USE CASES</a>
+    <a href="#pricing">PRICING</a>
+  </div>
+  <a href="SPECTRA_v4_6.html" class="nav-cta">LAUNCH APP →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow">FORENSIC INTELLIGENCE SUITE — PROFESSIONAL GRADE</div>
+  <h1 class="hero-title">
+    <span class="accent">SPECTRA</span>
+    <span class="suite">SUITE</span>
+  </h1>
+  <p class="hero-sub">
+    Professional forensic audio, image, and video enhancement tools built for <strong>investigators, journalists, legal professionals</strong> and anyone who needs to hear and see what others tried to hide.
+  </p>
+  <div class="hero-actions">
+    <a href="SPECTRA_v4_6.html" class="btn-primary">LAUNCH SPECTRA →</a>
+    <a href="#tools" class="btn-secondary">EXPLORE TOOLS</a>
+  </div>
+
+  <!-- Animated spectrum -->
+  <div class="hero-spectrum" id="heroSpectrum"></div>
+</section>
+
+<!-- STATS -->
+<div class="stats-bar reveal">
+  <div class="stat-item">
+    <div class="stat-num">3</div>
+    <div class="stat-label">LIVE TOOLS</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">8</div>
+    <div class="stat-label">EQ BANDS</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">5</div>
+    <div class="stat-label">NOISE FILTERS</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">∞</div>
+    <div class="stat-label">STACK LAYERS</div>
+  </div>
+</div>
+
+<!-- TOOLS -->
+<section class="tools-section" id="tools">
+  <div class="section-label">FORENSIC TOOLS</div>
+  <h2 class="section-heading reveal">THE SUITE</h2>
+
+  <div class="tools-grid">
+
+    <!-- SPECTRA -->
+    <a href="SPECTRA_v4_6.html" class="tool-card reveal" style="--card-accent: #00e5ff;">
+      <div class="tool-badge" style="border-color:#00e5ff;color:#00e5ff;">AUDIO</div>
+      <div class="tool-name" style="color:#00e5ff;">SPECTRA</div>
+      <div class="tool-version" style="color:#4a5a7a;">VERSION 6.0 — LIVE</div>
+      <p class="tool-desc">Professional forensic audio enhancement. Isolate whispered conversations, eliminate room hum, remove preamp static, and transcribe recordings in real time.</p>
+      <div class="tool-features">
+        <div class="tool-feature">Real-time spectrum analyzer with problem zones</div>
+        <div class="tool-feature">Parametric 8-band EQ — human voice spectrum</div>
+        <div class="tool-feature">Speed, pitch & tempo control</div>
+        <div class="tool-feature">Live transcription with Web Speech API</div>
+        <div class="tool-feature">Snippet gallery with one-tap export</div>
+        <div class="tool-feature">Scrub dial with haptic feedback</div>
+      </div>
+      <div class="tool-arrow" style="color:#00e5ff;">OPEN SPECTRA →</div>
+      <div class="tool-bg-text">S</div>
+    </a>
+
+    <!-- LENS -->
+    <a href="#" class="tool-card reveal" style="--card-accent: #e8c84a;">
+      <div class="tool-badge" style="border-color:#e8c84a;color:#e8c84a;">IMAGE</div>
+      <div class="tool-name" style="color:#e8c84a;">LENS</div>
+      <div class="tool-version" style="color:#4a5a7a;">VERSION 3.0 — LIVE</div>
+      <p class="tool-desc">Forensic image enhancement for blurry screenshots and reflections. Synthetic stacking, deconvolution sharpening, and an interactive zoom lens for pixel-precise analysis.</p>
+      <div class="tool-features">
+        <div class="tool-feature">Synthetic image stacking up to 100 layers</div>
+        <div class="tool-feature">Moveable zoom lens — up to 8× magnification</div>
+        <div class="tool-feature">Offset layer with nudge pad for line removal</div>
+        <div class="tool-feature">Reflection deglare & surface flattening</div>
+        <div class="tool-feature">Live before/after split view</div>
+        <div class="tool-feature">One-tap undo & non-destructive workflow</div>
+      </div>
+      <div class="tool-arrow" style="color:#e8c84a;">OPEN LENS →</div>
+      <div class="tool-bg-text">L</div>
+    </a>
+
+    <!-- PRISM -->
+    <a href="PRISM_v1_2.html" class="tool-card reveal" style="--card-accent: #b060ff;">
+      <div class="tool-badge" style="border-color:#b060ff;color:#b060ff;">VIDEO</div>
+      <div class="tool-name" style="color:#b060ff;">PRISM</div>
+      <div class="tool-version" style="color:#4a5a7a;">VERSION 1.0 — LIVE</div>
+      <p class="tool-desc">Forensic video analysis. Scrub frame-by-frame, apply real-time visual enhancements, capture and export critical frames with timestamp embeds.</p>
+      <div class="tool-features">
+        <div class="tool-feature">Frame-by-frame stepping & loupe zoom</div>
+        <div class="tool-feature">Real-time speed control (0.25× – 2×)</div>
+        <div class="tool-feature">Brightness, contrast, sharpen & denoise filters</div>
+        <div class="tool-feature">Loop region playback for critical segments</div>
+        <div class="tool-feature">AI frame description powered by Claude</div>
+        <div class="tool-feature">Frame burst capture & PNG/JPEG export</div>
+      </div>
+      <div class="tool-arrow" style="color:#b060ff;">OPEN PRISM →</div>
+      <div class="tool-bg-text">P</div>
+    </a>
+
+    <!-- COMING SOON 2 -->
+    <div class="tool-card coming-soon reveal" style="--card-accent: #a855f7;">
+      <div class="tool-badge" style="border-color:#a855f7;color:#a855f7;">COMING SOON</div>
+      <div class="tool-name" style="color:#a855f7; opacity:0.5;">TRACE</div>
+      <div class="tool-version" style="color:#4a5a7a;">METADATA FORENSICS — IN DEVELOPMENT</div>
+      <p class="tool-desc">Deep file metadata extraction and analysis. Reveal hidden timestamps, device fingerprints, GPS coordinates and modification history embedded in media files.</p>
+      <div class="tool-features">
+        <div class="tool-feature">EXIF & metadata extraction</div>
+        <div class="tool-feature">GPS coordinate mapping</div>
+        <div class="tool-feature">Modification history analysis</div>
+        <div class="tool-feature">Device fingerprint identification</div>
+      </div>
+      <div class="tool-bg-text">T</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features-section" id="features">
+  <div class="features-inner">
+    <div class="section-label">WHY SPECTRA SUITE</div>
+    <h2 class="section-heading reveal">BUILT DIFFERENT</h2>
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon">🔒</div>
+        <div class="feature-title">100% PRIVATE</div>
+        <p class="feature-desc">All processing happens on your device. Your files never leave your browser. No uploads, no cloud, no data collection.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title">INSTANT ACCESS</div>
+        <p class="feature-desc">No install, no app store, no account required. Open the link and start working in seconds on any device.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🎯</div>
+        <div class="feature-title">FORENSIC GRADE</div>
+        <p class="feature-desc">Built for real investigative work. Not a toy — every feature exists because someone needed it in the field.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">📱</div>
+        <div class="feature-title">MOBILE FIRST</div>
+        <p class="feature-desc">Designed for phone use. Full haptic feedback, touch-optimized controls, and PWA installation on any device.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🔄</div>
+        <div class="feature-title">ALWAYS UPDATED</div>
+        <p class="feature-desc">Cloud-deployed and continuously improved. Every user always has the latest version automatically.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">⚖️</div>
+        <div class="feature-title">COURT READY</div>
+        <p class="feature-desc">Export enhanced files with original alongside for comparison. Designed with legal documentation workflows in mind.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- USE CASES -->
+<section class="use-cases" id="use-cases">
+  <div class="section-label">WHO USES IT</div>
+  <h2 class="section-heading reveal">USE CASES</h2>
+  <div class="use-case-grid">
+    <div class="use-case-card reveal">
+      <div class="use-case-icon">⚖️</div>
+      <div class="use-case-title">LEGAL & FAMILY COURT</div>
+      <p class="use-case-desc">Enhance recordings for evidence. Transcribe conversations. Document what happened.</p>
+    </div>
+    <div class="use-case-card reveal">
+      <div class="use-case-icon">🔍</div>
+      <div class="use-case-title">PRIVATE INVESTIGATORS</div>
+      <p class="use-case-desc">Enhance surveillance audio and images. Extract details from blurry or degraded media.</p>
+    </div>
+    <div class="use-case-card reveal">
+      <div class="use-case-icon">📰</div>
+      <div class="use-case-title">JOURNALISTS</div>
+      <p class="use-case-desc">Clean up field recordings. Enhance source images. Transcribe interviews on the go.</p>
+    </div>
+    <div class="use-case-card reveal">
+      <div class="use-case-icon">👨‍👩‍👧</div>
+      <div class="use-case-title">CHILD PROTECTION</div>
+      <p class="use-case-desc">Document evidence of abuse or neglect. Present clear, enhanced media to CPS and courts.</p>
+    </div>
+    <div class="use-case-card reveal">
+      <div class="use-case-icon">🏛️</div>
+      <div class="use-case-title">LAW ENFORCEMENT</div>
+      <p class="use-case-desc">Field audio and image enhancement without expensive lab equipment or turnaround time.</p>
+    </div>
+    <div class="use-case-card reveal">
+      <div class="use-case-icon">🎙️</div>
+      <div class="use-case-title">CONTENT CREATORS</div>
+      <p class="use-case-desc">Clean up audio from challenging environments. Recover footage from difficult conditions.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing-section" id="pricing">
+  <div class="pricing-inner">
+    <div class="section-label">SIMPLE PRICING</div>
+    <h2 class="section-heading reveal">GET ACCESS</h2>
+    <div class="pricing-grid">
+
+      <div class="price-card reveal">
+        <div class="price-badge" style="background:rgba(100,100,100,0.1);border:1px solid var(--border);color:var(--dim);">FREE</div>
+        <div class="price-name">BASIC</div>
+        <div class="price-amount">$0</div>
+        <div class="price-period">FOREVER FREE</div>
+        <div class="price-features">
+          <div class="price-feature included">SPECTRA audio editor</div>
+          <div class="price-feature included">LENS image enhancer</div>
+          <div class="price-feature included">PRISM video analyzer</div>
+          <div class="price-feature included">Core filters & EQ</div>
+          <div class="price-feature included">Export as WAV / PNG</div>
+          <div class="price-feature excluded">Snippet transcription</div>
+          <div class="price-feature excluded">Batch processing</div>
+          <div class="price-feature excluded">Priority support</div>
+        </div>
+        <a href="SPECTRA_v4_6.html" class="price-btn outline">LAUNCH FREE →</a>
+      </div>
+
+      <div class="price-card featured reveal">
+        <div class="price-badge" style="background:rgba(0,229,255,0.1);border:1px solid var(--cyan);color:var(--cyan);">MOST POPULAR</div>
+        <div class="price-name">PRO</div>
+        <div class="price-amount">$9<span style="font-size:18px;">.99</span></div>
+        <div class="price-period">PER MONTH</div>
+        <div class="price-features">
+          <div class="price-feature included">Everything in Free</div>
+          <div class="price-feature included">Live transcription</div>
+          <div class="price-feature included">Full snippet gallery</div>
+          <div class="price-feature included">Speed / pitch / tempo</div>
+          <div class="price-feature included">All future tools</div>
+          <div class="price-feature included">Priority support</div>
+        </div>
+        <a href="#" class="price-btn solid">GET PRO →</a>
+      </div>
+
+      <div class="price-card reveal">
+        <div class="price-badge" style="background:rgba(232,200,74,0.08);border:1px solid var(--gold);color:var(--gold);">ORGANIZATIONS</div>
+        <div class="price-name">TEAM</div>
+        <div class="price-amount">$49</div>
+        <div class="price-period">PER MONTH — UP TO 10 SEATS</div>
+        <div class="price-features">
+          <div class="price-feature included">Everything in Pro</div>
+          <div class="price-feature included">10 user seats</div>
+          <div class="price-feature included">Shared clip library</div>
+          <div class="price-feature included">Case management</div>
+          <div class="price-feature included">Custom branding</div>
+          <div class="price-feature included">Dedicated support</div>
+        </div>
+        <a href="#" class="price-btn outline" style="border-color:var(--gold);color:var(--gold);">CONTACT US →</a>
+      </div>
+
+    </div>
+    <p style="font-family:var(--mono);font-size:10px;color:var(--dim);text-align:center;margin-top:24px;letter-spacing:1px;">
+      * PRICING COMING SOON — ALL FEATURES CURRENTLY FREE DURING BETA
+    </p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">SPECTRA SUITE</div>
+  <div class="footer-copy">© 2025 SPECTRA SUITE — FORENSIC INTELLIGENCE TOOLS</div>
+  <div class="footer-links">
+    <a href="SPECTRA_v4_6.html">SPECTRA</a>
+    <a href="#">LENS</a>
+    <a href="PRISM_v1_2.html">PRISM</a>
+    <a href="#pricing">PRICING</a>
+  </div>
+</footer>
+
+<script>
+// ── SPECTRUM ANIMATION ──
+const spectrum = document.getElementById('heroSpectrum');
+for (let i = 0; i < 80; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'spec-bar';
+  const h = Math.random() * 100 + 10;
+  bar.style.cssText = `--h:${h}px; animation-duration:${0.8 + Math.random() * 2}s; animation-delay:${Math.random() * 2}s;`;
+  if (i < 15 || i > 65) bar.style.background = 'linear-gradient(0deg, #ff3d6b, transparent)';
+  else if (i > 25 && i < 55) bar.style.background = 'linear-gradient(0deg, #39ff14, transparent)';
+  spectrum.appendChild(bar);
+}
+
+// ── SCROLL REVEAL ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── CURSOR GLOW ──
+const glow = document.createElement('div');
+glow.style.cssText = 'position:fixed;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(0,229,255,0.04),transparent 70%);pointer-events:none;z-index:999;transform:translate(-50%,-50%);transition:left 0.1s,top 0.1s;';
+document.body.appendChild(glow);
+document.addEventListener('mousemove', e => {
+  glow.style.left = e.clientX + 'px';
+  glow.style.top = e.clientY + 'px';
+});
+</script>
+</body>
+</html>
